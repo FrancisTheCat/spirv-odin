@@ -55,7 +55,7 @@ main :: proc() {
 	grammar: Grammar
 	err := json.unmarshal(
 		os.read_entire_file(
-			"SPIRV-Headers/include/spirv/unified1/spirv.core.grammar.json",
+			"gen/SPIRV-Headers/include/spirv/unified1/spirv.core.grammar.json",
 		) or_else panic("Failed to read json grammar file"),
 		&grammar,
 	)
@@ -127,9 +127,21 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 			case:
 				unreachable()
 			}
-			if !(op_kind.category == .BitEnum && v == 0) {
-				append(&values, Enum_Value { name, v, })
+			if op_kind.category == .BitEnum {
+				if v == 0 {
+					continue
+				}
+				log2 :: proc(x: int) -> (result: int) {
+					x := x
+					for x > 1 {
+						x      /= 2
+						result += 1
+					}
+					return result
+				}
+				v = log2(v)
 			}
+			append(&values, Enum_Value { name, v, })
 		}
 		max_name_len -= skip
 		slice.sort_by(values[:], proc(a, b: Enum_Value) -> bool { return a.value < b.value })
@@ -141,15 +153,7 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 		}
 		fmt_str := fmt.tprintf("\t%%-%vs = %%v,", max_name_len)
 		for v in values {
-			log2 :: proc(x: int) -> (result: int) {
-				x := x
-				for x > 1 {
-					x      /= 2
-					result += 1
-				}
-				return result
-			}
-			fmt.sbprintfln(&b, fmt_str, v.name[skip:], log2(v.value))
+			fmt.sbprintfln(&b, fmt_str, v.name[skip:], v.value)
 		}
 		#partial switch op_kind.category {
 		case .BitEnum:
@@ -207,7 +211,15 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 				case "LiteralInteger", "LiteralExtInstInteger", "LiteralContextDependentNumber", "LiteralSpecConstantOpInteger":
 					fmt.sbprintfln(&bb, "append(out, u32(%s))", name)
 					type = "u32"
-				case "IdResult", "IdRef", "IdResultType", "IdScope", "IdMemorySemantics":
+				case "IdResult":
+					name = "result"
+					fmt.sbprintfln(&bb, "append(out, u32(%s))", name)
+					type = "Id"
+				case "IdResultType":
+					name = "result_type"
+					fmt.sbprintfln(&bb, "append(out, u32(%s))", name)
+					type = "Id"
+				case "IdRef", "IdScope", "IdMemorySemantics":
 					fmt.sbprintfln(&bb, "append(out, u32(%s))", name)
 					type = "Id"
 				case "PairIdRefLiteralInteger":
@@ -245,5 +257,5 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 	fmt.sbprintln(&ob, "}")
 	fmt.sbprint(&b, strings.to_string(ob))
 
-	os.write_entire_file("../generated.odin", transmute([]byte)strings.to_string(b))
+	os.write_entire_file("generated.odin", transmute([]byte)strings.to_string(b))
 }
