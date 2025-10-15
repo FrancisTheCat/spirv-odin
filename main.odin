@@ -3,33 +3,35 @@ package spirv
 import "core:os"
 import "core:slice"
 
+import spv "."
+
 main :: proc() {
-	instructions := make([dynamic]u32)
+	b: spv.Builder
+	id: spv.Id
+	spv.builder_init(&b, 'H' << 0 | 'E' << 8 | 'P' << 16 | 'H' << 24, &id)
 
-	append(&instructions, MAGIC_NUMBER)
-	append(&instructions, VERSION)
-	append(&instructions, 'H' << 0 | 'E' << 8 | 'P' << 16 | 'H' << 24)
-	append(&instructions, 10)
-	append(&instructions, 0)
+	spv.OpCapability(&b, .Matrix)
+	spv.OpCapability(&b, .Shader)
+	spv.OpCapability(&b, .ImageQuery)
 
-	write_OpCapability(&instructions, .Matrix)
-	write_OpCapability(&instructions, .Shader)
-	write_OpCapability(&instructions, .ImageQuery)
-
-	write_OpMemoryModel(&instructions, .Logical, .Simple)
+	spv.OpMemoryModel(&b, .Logical, .Simple)
     
-	write_OpEntryPoint(&instructions, .Vertex, 5, "main")
+	spv.OpEntryPoint(&b, .Vertex, 4, "main")
 
-	write_OpName(&instructions, 4, "main")
+	spv.OpName(&b, 5, "main")
 
-	write_OpTypeVoid(&instructions, 1)
-	write_OpTypeFloat(&instructions, 2, 32)
-	write_OpTypeFunction(&instructions, 3, 1)
+	t_void := spv.OpTypeVoid(&b)
+	t_f32  := spv.OpTypeFloat(&b, 32)
+	t_fun  := spv.OpTypeFunction(&b, t_void)
 
-	write_OpFunction(&instructions, 1, 5, {}, 3)
-		write_OpLabel(&instructions, 4)
-		write_OpReturn(&instructions)
-	write_OpFunctionEnd(&instructions)
+	function := spv.OpFunction(&b, 1, {}, t_fun)
+	label    := spv.OpLabel(&b)
+	spv.OpReturn(&b)
+	spv.OpFunctionEnd(&b)
+
+	_ = t_f32
+	_ = function
+	_ = label
 	
-	os.write_entire_file("test.spv", slice.reinterpret([]byte, instructions[:]))
+	os.write_entire_file("test.spv", slice.reinterpret([]byte, b.data[:]))
 }

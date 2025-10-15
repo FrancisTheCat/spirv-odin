@@ -9,6 +9,34 @@ MAGIC_NUMBER :: 0x07230203
 
 Id :: distinct u32
 
+Builder :: struct {
+	data:       [dynamic]u32,
+	current_id: ^Id,
+}
+
+builder_init :: proc(builder: ^Builder, generator_magic: u32, id: ^Id, allocator := context.allocator) {
+	builder.data       = make([dynamic]u32, allocator)
+	builder.current_id = id
+
+	append(&builder.data, MAGIC_NUMBER)
+	append(&builder.data, VERSION)
+	append(&builder.data, generator_magic)
+	append(&builder.data, 4194303)
+	append(&builder.data, 0)
+}
+
+builder_destroy :: proc(builder: ^Builder) {
+	delete(builder.data)
+}
+
+// you should write the id bound into this index of the _final_ SPIR-V u32 array
+ID_BOUND_INDEX :: 3
+
+next_id :: proc(builder: ^Builder) -> u32 {
+	builder.current_id^ += 1
+	return u32(builder.current_id^)
+}
+
 write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 	start := len(instructions)
 	resize(instructions, len(instructions) + (len(str) + 1 + 3) / 4)
@@ -1234,9232 +1262,9926 @@ TensorOperands :: bit_set[enum u32 {
 	NonPrivateElementARM    = 4,
 }; u32]
 
-write_OpNop :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.Nop))
-	defer out[start] |= u32(len(out) - start) << 16
+OpNop :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Nop))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpUndef :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.Undef))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUndef :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Undef))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpSourceContinued :: proc(out: ^[dynamic]u32, continued_source: string) {
-	start := len(out)
-	append(out, u32(Op.SourceContinued))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSourceContinued :: proc(builder: ^Builder, continued_source: string) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SourceContinued))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	write_string(out, continued_source)
+	write_string(&builder.data, continued_source)
 }
 
-write_OpSource :: proc(out: ^[dynamic]u32, _operand_0: SourceLanguage, version: u32, file: Maybe(Id) = nil, source: Maybe(string) = nil) {
-	start := len(out)
-	append(out, u32(Op.Source))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSource :: proc(builder: ^Builder, _operand_0: SourceLanguage, version: u32, file: Maybe(Id) = nil, source: Maybe(string) = nil) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Source))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, transmute(u32)_operand_0)
-	append(out, u32(version))
-	if file, ok := file.?; ok do append(out, u32(file))
-	if source, ok := source.?; ok do write_string(out, source)
+	append(&builder.data, transmute(u32)_operand_0)
+	append(&builder.data, u32(version))
+	if file, ok := file.?; ok do append(&builder.data, u32(file))
+	if source, ok := source.?; ok do write_string(&builder.data, source)
 }
 
-write_OpSourceExtension :: proc(out: ^[dynamic]u32, extension: string) {
-	start := len(out)
-	append(out, u32(Op.SourceExtension))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSourceExtension :: proc(builder: ^Builder, extension: string) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SourceExtension))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	write_string(out, extension)
+	write_string(&builder.data, extension)
 }
 
-write_OpName :: proc(out: ^[dynamic]u32, target: Id, name: string) {
-	start := len(out)
-	append(out, u32(Op.Name))
-	defer out[start] |= u32(len(out) - start) << 16
+OpName :: proc(builder: ^Builder, target: Id, name: string) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Name))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(target))
-	write_string(out, name)
+	append(&builder.data, u32(target))
+	write_string(&builder.data, name)
 }
 
-write_OpMemberName :: proc(out: ^[dynamic]u32, type: Id, member: u32, name: string) {
-	start := len(out)
-	append(out, u32(Op.MemberName))
-	defer out[start] |= u32(len(out) - start) << 16
+OpMemberName :: proc(builder: ^Builder, type: Id, member: u32, name: string) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.MemberName))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(type))
-	append(out, u32(member))
-	write_string(out, name)
+	append(&builder.data, u32(type))
+	append(&builder.data, u32(member))
+	write_string(&builder.data, name)
 }
 
-write_OpString :: proc(out: ^[dynamic]u32, result: Id, string: string) {
-	start := len(out)
-	append(out, u32(Op.String))
-	defer out[start] |= u32(len(out) - start) << 16
+OpString :: proc(builder: ^Builder, string: string) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.String))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	write_string(out, string)
+	append(&builder.data, next_id(builder))
+	write_string(&builder.data, string)
+	return builder.current_id^
 }
 
-write_OpLine :: proc(out: ^[dynamic]u32, file: Id, line: u32, column: u32) {
-	start := len(out)
-	append(out, u32(Op.Line))
-	defer out[start] |= u32(len(out) - start) << 16
+OpLine :: proc(builder: ^Builder, file: Id, line: u32, column: u32) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Line))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(file))
-	append(out, u32(line))
-	append(out, u32(column))
+	append(&builder.data, u32(file))
+	append(&builder.data, u32(line))
+	append(&builder.data, u32(column))
 }
 
-write_OpExtension :: proc(out: ^[dynamic]u32, name: string) {
-	start := len(out)
-	append(out, u32(Op.Extension))
-	defer out[start] |= u32(len(out) - start) << 16
+OpExtension :: proc(builder: ^Builder, name: string) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Extension))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	write_string(out, name)
+	write_string(&builder.data, name)
 }
 
-write_OpExtInstImport :: proc(out: ^[dynamic]u32, result: Id, name: string) {
-	start := len(out)
-	append(out, u32(Op.ExtInstImport))
-	defer out[start] |= u32(len(out) - start) << 16
+OpExtInstImport :: proc(builder: ^Builder, name: string) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ExtInstImport))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	write_string(out, name)
+	append(&builder.data, next_id(builder))
+	write_string(&builder.data, name)
+	return builder.current_id^
 }
 
-write_OpExtInst :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, set: Id, instruction: u32, _operand_4: ..Id) {
-	start := len(out)
-	append(out, u32(Op.ExtInst))
-	defer out[start] |= u32(len(out) - start) << 16
+OpExtInst :: proc(builder: ^Builder, result_type: Id, set: Id, instruction: u32, _operand_4: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ExtInst))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(set))
-	append(out, u32(instruction))
-	for _operand_4 in _operand_4 do append(out, u32(_operand_4))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(set))
+	append(&builder.data, u32(instruction))
+	for _operand_4 in _operand_4 do append(&builder.data, u32(_operand_4))
+	return builder.current_id^
 }
 
-write_OpMemoryModel :: proc(out: ^[dynamic]u32, _operand_0: AddressingModel, _operand_1: MemoryModel) {
-	start := len(out)
-	append(out, u32(Op.MemoryModel))
-	defer out[start] |= u32(len(out) - start) << 16
+OpMemoryModel :: proc(builder: ^Builder, _operand_0: AddressingModel, _operand_1: MemoryModel) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.MemoryModel))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, transmute(u32)_operand_0)
-	append(out, transmute(u32)_operand_1)
+	append(&builder.data, transmute(u32)_operand_0)
+	append(&builder.data, transmute(u32)_operand_1)
 }
 
-write_OpEntryPoint :: proc(out: ^[dynamic]u32, _operand_0: ExecutionModel, entry_point: Id, name: string, interface: ..Id) {
-	start := len(out)
-	append(out, u32(Op.EntryPoint))
-	defer out[start] |= u32(len(out) - start) << 16
+OpEntryPoint :: proc(builder: ^Builder, _operand_0: ExecutionModel, entry_point: Id, name: string, interface: ..Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.EntryPoint))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, transmute(u32)_operand_0)
-	append(out, u32(entry_point))
-	write_string(out, name)
-	for interface in interface do append(out, u32(interface))
+	append(&builder.data, transmute(u32)_operand_0)
+	append(&builder.data, u32(entry_point))
+	write_string(&builder.data, name)
+	for interface in interface do append(&builder.data, u32(interface))
 }
 
-write_OpExecutionMode :: proc(out: ^[dynamic]u32, entry_point: Id, mode: ExecutionMode) {
-	start := len(out)
-	append(out, u32(Op.ExecutionMode))
-	defer out[start] |= u32(len(out) - start) << 16
+OpExecutionMode :: proc(builder: ^Builder, entry_point: Id, mode: ExecutionMode) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ExecutionMode))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(entry_point))
-	append(out, transmute(u32)mode)
+	append(&builder.data, u32(entry_point))
+	append(&builder.data, transmute(u32)mode)
 }
 
-write_OpCapability :: proc(out: ^[dynamic]u32, capability: Capability) {
-	start := len(out)
-	append(out, u32(Op.Capability))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCapability :: proc(builder: ^Builder, capability: Capability) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Capability))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, transmute(u32)capability)
+	append(&builder.data, transmute(u32)capability)
 }
 
-write_OpTypeVoid :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeVoid))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeVoid :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeVoid))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeBool :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeBool))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeBool :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeBool))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeInt :: proc(out: ^[dynamic]u32, result: Id, width: u32, signedness: u32) {
-	start := len(out)
-	append(out, u32(Op.TypeInt))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeInt :: proc(builder: ^Builder, width: u32, signedness: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeInt))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(width))
-	append(out, u32(signedness))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(width))
+	append(&builder.data, u32(signedness))
+	return builder.current_id^
 }
 
-write_OpTypeFloat :: proc(out: ^[dynamic]u32, result: Id, width: u32, floating_point_encoding: Maybe(FPEncoding) = nil) {
-	start := len(out)
-	append(out, u32(Op.TypeFloat))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeFloat :: proc(builder: ^Builder, width: u32, floating_point_encoding: Maybe(FPEncoding) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeFloat))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(width))
-	if floating_point_encoding, ok := floating_point_encoding.?; ok do append(out, transmute(u32)floating_point_encoding)
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(width))
+	if floating_point_encoding, ok := floating_point_encoding.?; ok do append(&builder.data, transmute(u32)floating_point_encoding)
+	return builder.current_id^
 }
 
-write_OpTypeVector :: proc(out: ^[dynamic]u32, result: Id, component_type: Id, component_count: u32) {
-	start := len(out)
-	append(out, u32(Op.TypeVector))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeVector :: proc(builder: ^Builder, component_type: Id, component_count: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeVector))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(component_type))
-	append(out, u32(component_count))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(component_type))
+	append(&builder.data, u32(component_count))
+	return builder.current_id^
 }
 
-write_OpTypeMatrix :: proc(out: ^[dynamic]u32, result: Id, column_type: Id, column_count: u32) {
-	start := len(out)
-	append(out, u32(Op.TypeMatrix))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeMatrix :: proc(builder: ^Builder, column_type: Id, column_count: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeMatrix))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(column_type))
-	append(out, u32(column_count))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(column_type))
+	append(&builder.data, u32(column_count))
+	return builder.current_id^
 }
 
-write_OpTypeImage :: proc(out: ^[dynamic]u32, result: Id, sampled_type: Id, _operand_2: Dim, depth: u32, arrayed: u32, ms: u32, sampled: u32, _operand_7: ImageFormat, _operand_8: Maybe(AccessQualifier) = nil) {
-	start := len(out)
-	append(out, u32(Op.TypeImage))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeImage :: proc(builder: ^Builder, sampled_type: Id, _operand_2: Dim, depth: u32, arrayed: u32, ms: u32, sampled: u32, _operand_7: ImageFormat, _operand_8: Maybe(AccessQualifier) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeImage))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(sampled_type))
-	append(out, transmute(u32)_operand_2)
-	append(out, u32(depth))
-	append(out, u32(arrayed))
-	append(out, u32(ms))
-	append(out, u32(sampled))
-	append(out, transmute(u32)_operand_7)
-	if _operand_8, ok := _operand_8.?; ok do append(out, transmute(u32)_operand_8)
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_type))
+	append(&builder.data, transmute(u32)_operand_2)
+	append(&builder.data, u32(depth))
+	append(&builder.data, u32(arrayed))
+	append(&builder.data, u32(ms))
+	append(&builder.data, u32(sampled))
+	append(&builder.data, transmute(u32)_operand_7)
+	if _operand_8, ok := _operand_8.?; ok do append(&builder.data, transmute(u32)_operand_8)
+	return builder.current_id^
 }
 
-write_OpTypeSampler :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeSampler))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeSampler :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeSampler))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeSampledImage :: proc(out: ^[dynamic]u32, result: Id, image_type: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeSampledImage))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeSampledImage :: proc(builder: ^Builder, image_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeSampledImage))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(image_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image_type))
+	return builder.current_id^
 }
 
-write_OpTypeArray :: proc(out: ^[dynamic]u32, result: Id, element_type: Id, length: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeArray))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeArray :: proc(builder: ^Builder, element_type: Id, length: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeArray))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(element_type))
-	append(out, u32(length))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(element_type))
+	append(&builder.data, u32(length))
+	return builder.current_id^
 }
 
-write_OpTypeRuntimeArray :: proc(out: ^[dynamic]u32, result: Id, element_type: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeRuntimeArray))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeRuntimeArray :: proc(builder: ^Builder, element_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeRuntimeArray))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(element_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(element_type))
+	return builder.current_id^
 }
 
-write_OpTypeStruct :: proc(out: ^[dynamic]u32, result: Id, _operand_1: ..Id) {
-	start := len(out)
-	append(out, u32(Op.TypeStruct))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeStruct :: proc(builder: ^Builder, _operand_1: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeStruct))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	for _operand_1 in _operand_1 do append(out, u32(_operand_1))
+	append(&builder.data, next_id(builder))
+	for _operand_1 in _operand_1 do append(&builder.data, u32(_operand_1))
+	return builder.current_id^
 }
 
-write_OpTypeOpaque :: proc(out: ^[dynamic]u32, result: Id, _operand_1: string) {
-	start := len(out)
-	append(out, u32(Op.TypeOpaque))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeOpaque :: proc(builder: ^Builder, _operand_1: string) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeOpaque))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	write_string(out, _operand_1)
+	append(&builder.data, next_id(builder))
+	write_string(&builder.data, _operand_1)
+	return builder.current_id^
 }
 
-write_OpTypePointer :: proc(out: ^[dynamic]u32, result: Id, _operand_1: StorageClass, type: Id) {
-	start := len(out)
-	append(out, u32(Op.TypePointer))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypePointer :: proc(builder: ^Builder, _operand_1: StorageClass, type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypePointer))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, transmute(u32)_operand_1)
-	append(out, u32(type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, transmute(u32)_operand_1)
+	append(&builder.data, u32(type))
+	return builder.current_id^
 }
 
-write_OpTypeFunction :: proc(out: ^[dynamic]u32, result: Id, return_type: Id, _operand_2: ..Id) {
-	start := len(out)
-	append(out, u32(Op.TypeFunction))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeFunction :: proc(builder: ^Builder, return_type: Id, _operand_2: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeFunction))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(return_type))
-	for _operand_2 in _operand_2 do append(out, u32(_operand_2))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(return_type))
+	for _operand_2 in _operand_2 do append(&builder.data, u32(_operand_2))
+	return builder.current_id^
 }
 
-write_OpTypeEvent :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeEvent))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeEvent :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeEvent))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeDeviceEvent :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeDeviceEvent))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeDeviceEvent :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeDeviceEvent))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeReserveId :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeReserveId))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeReserveId :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeReserveId))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeQueue :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeQueue))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeQueue :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeQueue))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypePipe :: proc(out: ^[dynamic]u32, result: Id, qualifier: AccessQualifier) {
-	start := len(out)
-	append(out, u32(Op.TypePipe))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypePipe :: proc(builder: ^Builder, qualifier: AccessQualifier) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypePipe))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, transmute(u32)qualifier)
+	append(&builder.data, next_id(builder))
+	append(&builder.data, transmute(u32)qualifier)
+	return builder.current_id^
 }
 
-write_OpTypeForwardPointer :: proc(out: ^[dynamic]u32, pointer_type: Id, _operand_1: StorageClass) {
-	start := len(out)
-	append(out, u32(Op.TypeForwardPointer))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeForwardPointer :: proc(builder: ^Builder, pointer_type: Id, _operand_1: StorageClass) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeForwardPointer))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(pointer_type))
-	append(out, transmute(u32)_operand_1)
+	append(&builder.data, u32(pointer_type))
+	append(&builder.data, transmute(u32)_operand_1)
 }
 
-write_OpConstantTrue :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.ConstantTrue))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConstantTrue :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConstantTrue))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpConstantFalse :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.ConstantFalse))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConstantFalse :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConstantFalse))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpConstant :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, value: u32) {
-	start := len(out)
-	append(out, u32(Op.Constant))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConstant :: proc(builder: ^Builder, result_type: Id, value: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Constant))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpConstantComposite :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, constituents: ..Id) {
-	start := len(out)
-	append(out, u32(Op.ConstantComposite))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConstantComposite :: proc(builder: ^Builder, result_type: Id, constituents: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConstantComposite))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	for constituents in constituents do append(out, u32(constituents))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	for constituents in constituents do append(&builder.data, u32(constituents))
+	return builder.current_id^
 }
 
-write_OpConstantSampler :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, _operand_2: SamplerAddressingMode, param: u32, _operand_4: SamplerFilterMode) {
-	start := len(out)
-	append(out, u32(Op.ConstantSampler))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConstantSampler :: proc(builder: ^Builder, result_type: Id, _operand_2: SamplerAddressingMode, param: u32, _operand_4: SamplerFilterMode) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConstantSampler))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, transmute(u32)_operand_2)
-	append(out, u32(param))
-	append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, transmute(u32)_operand_2)
+	append(&builder.data, u32(param))
+	append(&builder.data, transmute(u32)_operand_4)
+	return builder.current_id^
 }
 
-write_OpConstantNull :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.ConstantNull))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConstantNull :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConstantNull))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpSpecConstantTrue :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.SpecConstantTrue))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSpecConstantTrue :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SpecConstantTrue))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpSpecConstantFalse :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.SpecConstantFalse))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSpecConstantFalse :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SpecConstantFalse))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpSpecConstant :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, value: u32) {
-	start := len(out)
-	append(out, u32(Op.SpecConstant))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSpecConstant :: proc(builder: ^Builder, result_type: Id, value: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SpecConstant))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpSpecConstantComposite :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, constituents: ..Id) {
-	start := len(out)
-	append(out, u32(Op.SpecConstantComposite))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSpecConstantComposite :: proc(builder: ^Builder, result_type: Id, constituents: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SpecConstantComposite))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	for constituents in constituents do append(out, u32(constituents))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	for constituents in constituents do append(&builder.data, u32(constituents))
+	return builder.current_id^
 }
 
-write_OpSpecConstantOp :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, opcode: u32) {
-	start := len(out)
-	append(out, u32(Op.SpecConstantOp))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSpecConstantOp :: proc(builder: ^Builder, result_type: Id, opcode: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SpecConstantOp))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(opcode))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(opcode))
+	return builder.current_id^
 }
 
-write_OpFunction :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, _operand_2: FunctionControl, function_type: Id) {
-	start := len(out)
-	append(out, u32(Op.Function))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFunction :: proc(builder: ^Builder, result_type: Id, _operand_2: FunctionControl, function_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Function))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, transmute(u32)_operand_2)
-	append(out, u32(function_type))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, transmute(u32)_operand_2)
+	append(&builder.data, u32(function_type))
+	return builder.current_id^
 }
 
-write_OpFunctionParameter :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.FunctionParameter))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFunctionParameter :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FunctionParameter))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpFunctionEnd :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.FunctionEnd))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFunctionEnd :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FunctionEnd))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpFunctionCall :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, function: Id, _operand_3: ..Id) {
-	start := len(out)
-	append(out, u32(Op.FunctionCall))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFunctionCall :: proc(builder: ^Builder, result_type: Id, function: Id, _operand_3: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FunctionCall))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(function))
-	for _operand_3 in _operand_3 do append(out, u32(_operand_3))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(function))
+	for _operand_3 in _operand_3 do append(&builder.data, u32(_operand_3))
+	return builder.current_id^
 }
 
-write_OpVariable :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, _operand_2: StorageClass, initializer: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.Variable))
-	defer out[start] |= u32(len(out) - start) << 16
+OpVariable :: proc(builder: ^Builder, result_type: Id, _operand_2: StorageClass, initializer: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Variable))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, transmute(u32)_operand_2)
-	if initializer, ok := initializer.?; ok do append(out, u32(initializer))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, transmute(u32)_operand_2)
+	if initializer, ok := initializer.?; ok do append(&builder.data, u32(initializer))
+	return builder.current_id^
 }
 
-write_OpImageTexelPointer :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id, coordinate: Id, sample: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageTexelPointer))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageTexelPointer :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, sample: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageTexelPointer))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
-	append(out, u32(coordinate))
-	append(out, u32(sample))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(sample))
+	return builder.current_id^
 }
 
-write_OpLoad :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, _operand_3: Maybe(MemoryAccess) = nil) {
-	start := len(out)
-	append(out, u32(Op.Load))
-	defer out[start] |= u32(len(out) - start) << 16
+OpLoad :: proc(builder: ^Builder, result_type: Id, pointer: Id, _operand_3: Maybe(MemoryAccess) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Load))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	if _operand_3, ok := _operand_3.?; ok do append(out, transmute(u32)_operand_3)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	if _operand_3, ok := _operand_3.?; ok do append(&builder.data, transmute(u32)_operand_3)
+	return builder.current_id^
 }
 
-write_OpStore :: proc(out: ^[dynamic]u32, pointer: Id, object: Id, _operand_2: Maybe(MemoryAccess) = nil) {
-	start := len(out)
-	append(out, u32(Op.Store))
-	defer out[start] |= u32(len(out) - start) << 16
+OpStore :: proc(builder: ^Builder, pointer: Id, object: Id, _operand_2: Maybe(MemoryAccess) = nil) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Store))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(pointer))
-	append(out, u32(object))
-	if _operand_2, ok := _operand_2.?; ok do append(out, transmute(u32)_operand_2)
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(object))
+	if _operand_2, ok := _operand_2.?; ok do append(&builder.data, transmute(u32)_operand_2)
 }
 
-write_OpCopyMemory :: proc(out: ^[dynamic]u32, target: Id, source: Id, _operand_2: Maybe(MemoryAccess) = nil, _operand_3: Maybe(MemoryAccess) = nil) {
-	start := len(out)
-	append(out, u32(Op.CopyMemory))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCopyMemory :: proc(builder: ^Builder, target: Id, source: Id, _operand_2: Maybe(MemoryAccess) = nil, _operand_3: Maybe(MemoryAccess) = nil) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CopyMemory))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(target))
-	append(out, u32(source))
-	if _operand_2, ok := _operand_2.?; ok do append(out, transmute(u32)_operand_2)
-	if _operand_3, ok := _operand_3.?; ok do append(out, transmute(u32)_operand_3)
+	append(&builder.data, u32(target))
+	append(&builder.data, u32(source))
+	if _operand_2, ok := _operand_2.?; ok do append(&builder.data, transmute(u32)_operand_2)
+	if _operand_3, ok := _operand_3.?; ok do append(&builder.data, transmute(u32)_operand_3)
 }
 
-write_OpCopyMemorySized :: proc(out: ^[dynamic]u32, target: Id, source: Id, size: Id, _operand_3: Maybe(MemoryAccess) = nil, _operand_4: Maybe(MemoryAccess) = nil) {
-	start := len(out)
-	append(out, u32(Op.CopyMemorySized))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCopyMemorySized :: proc(builder: ^Builder, target: Id, source: Id, size: Id, _operand_3: Maybe(MemoryAccess) = nil, _operand_4: Maybe(MemoryAccess) = nil) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CopyMemorySized))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(target))
-	append(out, u32(source))
-	append(out, u32(size))
-	if _operand_3, ok := _operand_3.?; ok do append(out, transmute(u32)_operand_3)
-	if _operand_4, ok := _operand_4.?; ok do append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(target))
+	append(&builder.data, u32(source))
+	append(&builder.data, u32(size))
+	if _operand_3, ok := _operand_3.?; ok do append(&builder.data, transmute(u32)_operand_3)
+	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
 }
 
-write_OpAccessChain :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base: Id, indexes: ..Id) {
-	start := len(out)
-	append(out, u32(Op.AccessChain))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAccessChain :: proc(builder: ^Builder, result_type: Id, base: Id, indexes: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AccessChain))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base))
-	for indexes in indexes do append(out, u32(indexes))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base))
+	for indexes in indexes do append(&builder.data, u32(indexes))
+	return builder.current_id^
 }
 
-write_OpInBoundsAccessChain :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base: Id, indexes: ..Id) {
-	start := len(out)
-	append(out, u32(Op.InBoundsAccessChain))
-	defer out[start] |= u32(len(out) - start) << 16
+OpInBoundsAccessChain :: proc(builder: ^Builder, result_type: Id, base: Id, indexes: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.InBoundsAccessChain))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base))
-	for indexes in indexes do append(out, u32(indexes))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base))
+	for indexes in indexes do append(&builder.data, u32(indexes))
+	return builder.current_id^
 }
 
-write_OpPtrAccessChain :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base: Id, element: Id, indexes: ..Id) {
-	start := len(out)
-	append(out, u32(Op.PtrAccessChain))
-	defer out[start] |= u32(len(out) - start) << 16
+OpPtrAccessChain :: proc(builder: ^Builder, result_type: Id, base: Id, element: Id, indexes: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.PtrAccessChain))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base))
-	append(out, u32(element))
-	for indexes in indexes do append(out, u32(indexes))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base))
+	append(&builder.data, u32(element))
+	for indexes in indexes do append(&builder.data, u32(indexes))
+	return builder.current_id^
 }
 
-write_OpArrayLength :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, structure: Id, array_member: u32) {
-	start := len(out)
-	append(out, u32(Op.ArrayLength))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArrayLength :: proc(builder: ^Builder, result_type: Id, structure: Id, array_member: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArrayLength))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(structure))
-	append(out, u32(array_member))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(structure))
+	append(&builder.data, u32(array_member))
+	return builder.current_id^
 }
 
-write_OpGenericPtrMemSemantics :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id) {
-	start := len(out)
-	append(out, u32(Op.GenericPtrMemSemantics))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGenericPtrMemSemantics :: proc(builder: ^Builder, result_type: Id, pointer: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GenericPtrMemSemantics))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	return builder.current_id^
 }
 
-write_OpInBoundsPtrAccessChain :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base: Id, element: Id, indexes: ..Id) {
-	start := len(out)
-	append(out, u32(Op.InBoundsPtrAccessChain))
-	defer out[start] |= u32(len(out) - start) << 16
+OpInBoundsPtrAccessChain :: proc(builder: ^Builder, result_type: Id, base: Id, element: Id, indexes: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.InBoundsPtrAccessChain))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base))
-	append(out, u32(element))
-	for indexes in indexes do append(out, u32(indexes))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base))
+	append(&builder.data, u32(element))
+	for indexes in indexes do append(&builder.data, u32(indexes))
+	return builder.current_id^
 }
 
-write_OpDecorate :: proc(out: ^[dynamic]u32, target: Id, _operand_1: Decoration) {
-	start := len(out)
-	append(out, u32(Op.Decorate))
-	defer out[start] |= u32(len(out) - start) << 16
+OpDecorate :: proc(builder: ^Builder, target: Id, _operand_1: Decoration) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Decorate))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(target))
-	append(out, transmute(u32)_operand_1)
+	append(&builder.data, u32(target))
+	append(&builder.data, transmute(u32)_operand_1)
 }
 
-write_OpMemberDecorate :: proc(out: ^[dynamic]u32, structure_type: Id, member: u32, _operand_2: Decoration) {
-	start := len(out)
-	append(out, u32(Op.MemberDecorate))
-	defer out[start] |= u32(len(out) - start) << 16
+OpMemberDecorate :: proc(builder: ^Builder, structure_type: Id, member: u32, _operand_2: Decoration) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.MemberDecorate))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(structure_type))
-	append(out, u32(member))
-	append(out, transmute(u32)_operand_2)
+	append(&builder.data, u32(structure_type))
+	append(&builder.data, u32(member))
+	append(&builder.data, transmute(u32)_operand_2)
 }
 
-write_OpDecorationGroup :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.DecorationGroup))
-	defer out[start] |= u32(len(out) - start) << 16
+OpDecorationGroup :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.DecorationGroup))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpGroupDecorate :: proc(out: ^[dynamic]u32, decoration_group: Id, targets: ..Id) {
-	start := len(out)
-	append(out, u32(Op.GroupDecorate))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupDecorate :: proc(builder: ^Builder, decoration_group: Id, targets: ..Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupDecorate))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(decoration_group))
-	for targets in targets do append(out, u32(targets))
+	append(&builder.data, u32(decoration_group))
+	for targets in targets do append(&builder.data, u32(targets))
 }
 
-write_OpGroupMemberDecorate :: proc(out: ^[dynamic]u32, decoration_group: Id, targets: ..PairIdRefLiteralInteger) {
-	start := len(out)
-	append(out, u32(Op.GroupMemberDecorate))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupMemberDecorate :: proc(builder: ^Builder, decoration_group: Id, targets: ..struct { id: Id, literal: u32, }) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupMemberDecorate))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(decoration_group))
-	for targets in targets do append(out, transmute(u32)targets)
+	append(&builder.data, u32(decoration_group))
+	for targets in targets do append(&builder.data, u32(targets.id), targets.literal)
 }
 
-write_OpVectorExtractDynamic :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, vector: Id, index: Id) {
-	start := len(out)
-	append(out, u32(Op.VectorExtractDynamic))
-	defer out[start] |= u32(len(out) - start) << 16
+OpVectorExtractDynamic :: proc(builder: ^Builder, result_type: Id, vector: Id, index: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.VectorExtractDynamic))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(vector))
-	append(out, u32(index))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(vector))
+	append(&builder.data, u32(index))
+	return builder.current_id^
 }
 
-write_OpVectorInsertDynamic :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, vector: Id, component: Id, index: Id) {
-	start := len(out)
-	append(out, u32(Op.VectorInsertDynamic))
-	defer out[start] |= u32(len(out) - start) << 16
+OpVectorInsertDynamic :: proc(builder: ^Builder, result_type: Id, vector: Id, component: Id, index: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.VectorInsertDynamic))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(vector))
-	append(out, u32(component))
-	append(out, u32(index))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(vector))
+	append(&builder.data, u32(component))
+	append(&builder.data, u32(index))
+	return builder.current_id^
 }
 
-write_OpVectorShuffle :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, vector_1: Id, vector_2: Id, components: ..u32) {
-	start := len(out)
-	append(out, u32(Op.VectorShuffle))
-	defer out[start] |= u32(len(out) - start) << 16
+OpVectorShuffle :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2: Id, components: ..u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.VectorShuffle))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(vector_1))
-	append(out, u32(vector_2))
-	for components in components do append(out, u32(components))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(vector_1))
+	append(&builder.data, u32(vector_2))
+	for components in components do append(&builder.data, u32(components))
+	return builder.current_id^
 }
 
-write_OpCompositeConstruct :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, constituents: ..Id) {
-	start := len(out)
-	append(out, u32(Op.CompositeConstruct))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCompositeConstruct :: proc(builder: ^Builder, result_type: Id, constituents: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CompositeConstruct))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	for constituents in constituents do append(out, u32(constituents))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	for constituents in constituents do append(&builder.data, u32(constituents))
+	return builder.current_id^
 }
 
-write_OpCompositeExtract :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, composite: Id, indexes: ..u32) {
-	start := len(out)
-	append(out, u32(Op.CompositeExtract))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCompositeExtract :: proc(builder: ^Builder, result_type: Id, composite: Id, indexes: ..u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CompositeExtract))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(composite))
-	for indexes in indexes do append(out, u32(indexes))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(composite))
+	for indexes in indexes do append(&builder.data, u32(indexes))
+	return builder.current_id^
 }
 
-write_OpCompositeInsert :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, object: Id, composite: Id, indexes: ..u32) {
-	start := len(out)
-	append(out, u32(Op.CompositeInsert))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCompositeInsert :: proc(builder: ^Builder, result_type: Id, object: Id, composite: Id, indexes: ..u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CompositeInsert))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(object))
-	append(out, u32(composite))
-	for indexes in indexes do append(out, u32(indexes))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(object))
+	append(&builder.data, u32(composite))
+	for indexes in indexes do append(&builder.data, u32(indexes))
+	return builder.current_id^
 }
 
-write_OpCopyObject :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.CopyObject))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCopyObject :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CopyObject))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
-write_OpTranspose :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, matrix_: Id) {
-	start := len(out)
-	append(out, u32(Op.Transpose))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTranspose :: proc(builder: ^Builder, result_type: Id, matrix_: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Transpose))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(matrix_))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(matrix_))
+	return builder.current_id^
 }
 
-write_OpSampledImage :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id, sampler: Id) {
-	start := len(out)
-	append(out, u32(Op.SampledImage))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSampledImage :: proc(builder: ^Builder, result_type: Id, image: Id, sampler: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SampledImage))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
-	append(out, u32(sampler))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	append(&builder.data, u32(sampler))
+	return builder.current_id^
 }
 
-write_OpImageSampleImplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageSampleImplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSampleImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSampleImplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	return builder.current_id^
 }
 
-write_OpImageSampleExplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands) {
-	start := len(out)
-	append(out, u32(Op.ImageSampleExplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSampleExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSampleExplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, transmute(u32)_operand_4)
+	return builder.current_id^
 }
 
-write_OpImageSampleDrefImplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageSampleDrefImplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSampleDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSampleDrefImplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, u32(d_ref_))
-	if _operand_5, ok := _operand_5.?; ok do append(out, transmute(u32)_operand_5)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(d_ref_))
+	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	return builder.current_id^
 }
 
-write_OpImageSampleDrefExplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands) {
-	start := len(out)
-	append(out, u32(Op.ImageSampleDrefExplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSampleDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSampleDrefExplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, u32(d_ref_))
-	append(out, transmute(u32)_operand_5)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(d_ref_))
+	append(&builder.data, transmute(u32)_operand_5)
+	return builder.current_id^
 }
 
-write_OpImageSampleProjImplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageSampleProjImplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSampleProjImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSampleProjImplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	return builder.current_id^
 }
 
-write_OpImageSampleProjExplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands) {
-	start := len(out)
-	append(out, u32(Op.ImageSampleProjExplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSampleProjExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSampleProjExplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, transmute(u32)_operand_4)
+	return builder.current_id^
 }
 
-write_OpImageSampleProjDrefImplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageSampleProjDrefImplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSampleProjDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSampleProjDrefImplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, u32(d_ref_))
-	if _operand_5, ok := _operand_5.?; ok do append(out, transmute(u32)_operand_5)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(d_ref_))
+	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	return builder.current_id^
 }
 
-write_OpImageSampleProjDrefExplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands) {
-	start := len(out)
-	append(out, u32(Op.ImageSampleProjDrefExplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSampleProjDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSampleProjDrefExplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, u32(d_ref_))
-	append(out, transmute(u32)_operand_5)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(d_ref_))
+	append(&builder.data, transmute(u32)_operand_5)
+	return builder.current_id^
 }
 
-write_OpImageFetch :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageFetch))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageFetch :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageFetch))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
-	append(out, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	append(&builder.data, u32(coordinate))
+	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	return builder.current_id^
 }
 
-write_OpImageGather :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, component: Id, _operand_5: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageGather))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, component: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageGather))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, u32(component))
-	if _operand_5, ok := _operand_5.?; ok do append(out, transmute(u32)_operand_5)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(component))
+	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	return builder.current_id^
 }
 
-write_OpImageDrefGather :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageDrefGather))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageDrefGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageDrefGather))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, u32(d_ref_))
-	if _operand_5, ok := _operand_5.?; ok do append(out, transmute(u32)_operand_5)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(d_ref_))
+	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	return builder.current_id^
 }
 
-write_OpImageRead :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageRead))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageRead :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageRead))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
-	append(out, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	append(&builder.data, u32(coordinate))
+	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	return builder.current_id^
 }
 
-write_OpImageWrite :: proc(out: ^[dynamic]u32, image: Id, coordinate: Id, texel: Id, _operand_3: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageWrite))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageWrite :: proc(builder: ^Builder, image: Id, coordinate: Id, texel: Id, _operand_3: Maybe(ImageOperands) = nil) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageWrite))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(image))
-	append(out, u32(coordinate))
-	append(out, u32(texel))
-	if _operand_3, ok := _operand_3.?; ok do append(out, transmute(u32)_operand_3)
+	append(&builder.data, u32(image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(texel))
+	if _operand_3, ok := _operand_3.?; ok do append(&builder.data, transmute(u32)_operand_3)
 }
 
-write_OpImage :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id) {
-	start := len(out)
-	append(out, u32(Op.Image))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImage :: proc(builder: ^Builder, result_type: Id, sampled_image: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Image))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	return builder.current_id^
 }
 
-write_OpImageQueryFormat :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageQueryFormat))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageQueryFormat :: proc(builder: ^Builder, result_type: Id, image: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageQueryFormat))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	return builder.current_id^
 }
 
-write_OpImageQueryOrder :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageQueryOrder))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageQueryOrder :: proc(builder: ^Builder, result_type: Id, image: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageQueryOrder))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	return builder.current_id^
 }
 
-write_OpImageQuerySizeLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id, level_of_detail: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageQuerySizeLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageQuerySizeLod :: proc(builder: ^Builder, result_type: Id, image: Id, level_of_detail: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageQuerySizeLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
-	append(out, u32(level_of_detail))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	append(&builder.data, u32(level_of_detail))
+	return builder.current_id^
 }
 
-write_OpImageQuerySize :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageQuerySize))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageQuerySize :: proc(builder: ^Builder, result_type: Id, image: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageQuerySize))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	return builder.current_id^
 }
 
-write_OpImageQueryLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageQueryLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageQueryLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageQueryLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	return builder.current_id^
 }
 
-write_OpImageQueryLevels :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageQueryLevels))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageQueryLevels :: proc(builder: ^Builder, result_type: Id, image: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageQueryLevels))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	return builder.current_id^
 }
 
-write_OpImageQuerySamples :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageQuerySamples))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageQuerySamples :: proc(builder: ^Builder, result_type: Id, image: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageQuerySamples))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	return builder.current_id^
 }
 
-write_OpConvertFToU :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, float_value: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertFToU))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConvertFToU :: proc(builder: ^Builder, result_type: Id, float_value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertFToU))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(float_value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(float_value))
+	return builder.current_id^
 }
 
-write_OpConvertFToS :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, float_value: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertFToS))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConvertFToS :: proc(builder: ^Builder, result_type: Id, float_value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertFToS))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(float_value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(float_value))
+	return builder.current_id^
 }
 
-write_OpConvertSToF :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, signed_value: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertSToF))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConvertSToF :: proc(builder: ^Builder, result_type: Id, signed_value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertSToF))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(signed_value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(signed_value))
+	return builder.current_id^
 }
 
-write_OpConvertUToF :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, unsigned_value: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertUToF))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConvertUToF :: proc(builder: ^Builder, result_type: Id, unsigned_value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertUToF))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(unsigned_value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(unsigned_value))
+	return builder.current_id^
 }
 
-write_OpUConvert :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, unsigned_value: Id) {
-	start := len(out)
-	append(out, u32(Op.UConvert))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUConvert :: proc(builder: ^Builder, result_type: Id, unsigned_value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UConvert))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(unsigned_value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(unsigned_value))
+	return builder.current_id^
 }
 
-write_OpSConvert :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, signed_value: Id) {
-	start := len(out)
-	append(out, u32(Op.SConvert))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSConvert :: proc(builder: ^Builder, result_type: Id, signed_value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SConvert))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(signed_value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(signed_value))
+	return builder.current_id^
 }
 
-write_OpFConvert :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, float_value: Id) {
-	start := len(out)
-	append(out, u32(Op.FConvert))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFConvert :: proc(builder: ^Builder, result_type: Id, float_value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FConvert))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(float_value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(float_value))
+	return builder.current_id^
 }
 
-write_OpQuantizeToF16 :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.QuantizeToF16))
-	defer out[start] |= u32(len(out) - start) << 16
+OpQuantizeToF16 :: proc(builder: ^Builder, result_type: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.QuantizeToF16))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpConvertPtrToU :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertPtrToU))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConvertPtrToU :: proc(builder: ^Builder, result_type: Id, pointer: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertPtrToU))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	return builder.current_id^
 }
 
-write_OpSatConvertSToU :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, signed_value: Id) {
-	start := len(out)
-	append(out, u32(Op.SatConvertSToU))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSatConvertSToU :: proc(builder: ^Builder, result_type: Id, signed_value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SatConvertSToU))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(signed_value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(signed_value))
+	return builder.current_id^
 }
 
-write_OpSatConvertUToS :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, unsigned_value: Id) {
-	start := len(out)
-	append(out, u32(Op.SatConvertUToS))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSatConvertUToS :: proc(builder: ^Builder, result_type: Id, unsigned_value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SatConvertUToS))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(unsigned_value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(unsigned_value))
+	return builder.current_id^
 }
 
-write_OpConvertUToPtr :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, integer_value: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertUToPtr))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConvertUToPtr :: proc(builder: ^Builder, result_type: Id, integer_value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertUToPtr))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(integer_value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(integer_value))
+	return builder.current_id^
 }
 
-write_OpPtrCastToGeneric :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id) {
-	start := len(out)
-	append(out, u32(Op.PtrCastToGeneric))
-	defer out[start] |= u32(len(out) - start) << 16
+OpPtrCastToGeneric :: proc(builder: ^Builder, result_type: Id, pointer: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.PtrCastToGeneric))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	return builder.current_id^
 }
 
-write_OpGenericCastToPtr :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id) {
-	start := len(out)
-	append(out, u32(Op.GenericCastToPtr))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGenericCastToPtr :: proc(builder: ^Builder, result_type: Id, pointer: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GenericCastToPtr))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	return builder.current_id^
 }
 
-write_OpGenericCastToPtrExplicit :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, storage: StorageClass) {
-	start := len(out)
-	append(out, u32(Op.GenericCastToPtrExplicit))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGenericCastToPtrExplicit :: proc(builder: ^Builder, result_type: Id, pointer: Id, storage: StorageClass) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GenericCastToPtrExplicit))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, transmute(u32)storage)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, transmute(u32)storage)
+	return builder.current_id^
 }
 
-write_OpBitcast :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.Bitcast))
-	defer out[start] |= u32(len(out) - start) << 16
+OpBitcast :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Bitcast))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
-write_OpSNegate :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.SNegate))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSNegate :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SNegate))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
-write_OpFNegate :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.FNegate))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFNegate :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FNegate))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
-write_OpIAdd :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.IAdd))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIAdd :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IAdd))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFAdd :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FAdd))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFAdd :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FAdd))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpISub :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.ISub))
-	defer out[start] |= u32(len(out) - start) << 16
+OpISub :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ISub))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFSub :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FSub))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFSub :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FSub))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpIMul :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.IMul))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIMul :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IMul))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFMul :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FMul))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFMul :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FMul))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpUDiv :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.UDiv))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUDiv :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UDiv))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpSDiv :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.SDiv))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSDiv :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SDiv))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFDiv :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FDiv))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFDiv :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FDiv))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpUMod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.UMod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUMod :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UMod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpSRem :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.SRem))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSRem :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SRem))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpSMod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.SMod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSMod :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SMod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFRem :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FRem))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFRem :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FRem))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFMod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FMod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFMod :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FMod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpVectorTimesScalar :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, vector: Id, scalar: Id) {
-	start := len(out)
-	append(out, u32(Op.VectorTimesScalar))
-	defer out[start] |= u32(len(out) - start) << 16
+OpVectorTimesScalar :: proc(builder: ^Builder, result_type: Id, vector: Id, scalar: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.VectorTimesScalar))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(vector))
-	append(out, u32(scalar))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(vector))
+	append(&builder.data, u32(scalar))
+	return builder.current_id^
 }
 
-write_OpMatrixTimesScalar :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, matrix_: Id, scalar: Id) {
-	start := len(out)
-	append(out, u32(Op.MatrixTimesScalar))
-	defer out[start] |= u32(len(out) - start) << 16
+OpMatrixTimesScalar :: proc(builder: ^Builder, result_type: Id, matrix_: Id, scalar: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.MatrixTimesScalar))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(matrix_))
-	append(out, u32(scalar))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(matrix_))
+	append(&builder.data, u32(scalar))
+	return builder.current_id^
 }
 
-write_OpVectorTimesMatrix :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, vector: Id, matrix_: Id) {
-	start := len(out)
-	append(out, u32(Op.VectorTimesMatrix))
-	defer out[start] |= u32(len(out) - start) << 16
+OpVectorTimesMatrix :: proc(builder: ^Builder, result_type: Id, vector: Id, matrix_: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.VectorTimesMatrix))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(vector))
-	append(out, u32(matrix_))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(vector))
+	append(&builder.data, u32(matrix_))
+	return builder.current_id^
 }
 
-write_OpMatrixTimesVector :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, matrix_: Id, vector: Id) {
-	start := len(out)
-	append(out, u32(Op.MatrixTimesVector))
-	defer out[start] |= u32(len(out) - start) << 16
+OpMatrixTimesVector :: proc(builder: ^Builder, result_type: Id, matrix_: Id, vector: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.MatrixTimesVector))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(matrix_))
-	append(out, u32(vector))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(matrix_))
+	append(&builder.data, u32(vector))
+	return builder.current_id^
 }
 
-write_OpMatrixTimesMatrix :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, leftmatrix: Id, rightmatrix: Id) {
-	start := len(out)
-	append(out, u32(Op.MatrixTimesMatrix))
-	defer out[start] |= u32(len(out) - start) << 16
+OpMatrixTimesMatrix :: proc(builder: ^Builder, result_type: Id, leftmatrix: Id, rightmatrix: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.MatrixTimesMatrix))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(leftmatrix))
-	append(out, u32(rightmatrix))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(leftmatrix))
+	append(&builder.data, u32(rightmatrix))
+	return builder.current_id^
 }
 
-write_OpOuterProduct :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, vector_1: Id, vector_2: Id) {
-	start := len(out)
-	append(out, u32(Op.OuterProduct))
-	defer out[start] |= u32(len(out) - start) << 16
+OpOuterProduct :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.OuterProduct))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(vector_1))
-	append(out, u32(vector_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(vector_1))
+	append(&builder.data, u32(vector_2))
+	return builder.current_id^
 }
 
-write_OpDot :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, vector_1: Id, vector_2: Id) {
-	start := len(out)
-	append(out, u32(Op.Dot))
-	defer out[start] |= u32(len(out) - start) << 16
+OpDot :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Dot))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(vector_1))
-	append(out, u32(vector_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(vector_1))
+	append(&builder.data, u32(vector_2))
+	return builder.current_id^
 }
 
-write_OpIAddCarry :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.IAddCarry))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIAddCarry :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IAddCarry))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpISubBorrow :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.ISubBorrow))
-	defer out[start] |= u32(len(out) - start) << 16
+OpISubBorrow :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ISubBorrow))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpUMulExtended :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.UMulExtended))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUMulExtended :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UMulExtended))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpSMulExtended :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.SMulExtended))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSMulExtended :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SMulExtended))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpAny :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, vector: Id) {
-	start := len(out)
-	append(out, u32(Op.Any))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAny :: proc(builder: ^Builder, result_type: Id, vector: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Any))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(vector))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(vector))
+	return builder.current_id^
 }
 
-write_OpAll :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, vector: Id) {
-	start := len(out)
-	append(out, u32(Op.All))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAll :: proc(builder: ^Builder, result_type: Id, vector: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.All))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(vector))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(vector))
+	return builder.current_id^
 }
 
-write_OpIsNan :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, x: Id) {
-	start := len(out)
-	append(out, u32(Op.IsNan))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIsNan :: proc(builder: ^Builder, result_type: Id, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IsNan))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpIsInf :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, x: Id) {
-	start := len(out)
-	append(out, u32(Op.IsInf))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIsInf :: proc(builder: ^Builder, result_type: Id, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IsInf))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpIsFinite :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, x: Id) {
-	start := len(out)
-	append(out, u32(Op.IsFinite))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIsFinite :: proc(builder: ^Builder, result_type: Id, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IsFinite))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpIsNormal :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, x: Id) {
-	start := len(out)
-	append(out, u32(Op.IsNormal))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIsNormal :: proc(builder: ^Builder, result_type: Id, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IsNormal))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpSignBitSet :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, x: Id) {
-	start := len(out)
-	append(out, u32(Op.SignBitSet))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSignBitSet :: proc(builder: ^Builder, result_type: Id, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SignBitSet))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpLessOrGreater :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, x: Id, y: Id) {
-	start := len(out)
-	append(out, u32(Op.LessOrGreater))
-	defer out[start] |= u32(len(out) - start) << 16
+OpLessOrGreater :: proc(builder: ^Builder, result_type: Id, x: Id, y: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.LessOrGreater))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(x))
-	append(out, u32(y))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(x))
+	append(&builder.data, u32(y))
+	return builder.current_id^
 }
 
-write_OpOrdered :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, x: Id, y: Id) {
-	start := len(out)
-	append(out, u32(Op.Ordered))
-	defer out[start] |= u32(len(out) - start) << 16
+OpOrdered :: proc(builder: ^Builder, result_type: Id, x: Id, y: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Ordered))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(x))
-	append(out, u32(y))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(x))
+	append(&builder.data, u32(y))
+	return builder.current_id^
 }
 
-write_OpUnordered :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, x: Id, y: Id) {
-	start := len(out)
-	append(out, u32(Op.Unordered))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUnordered :: proc(builder: ^Builder, result_type: Id, x: Id, y: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Unordered))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(x))
-	append(out, u32(y))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(x))
+	append(&builder.data, u32(y))
+	return builder.current_id^
 }
 
-write_OpLogicalEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.LogicalEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpLogicalEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.LogicalEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpLogicalNotEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.LogicalNotEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpLogicalNotEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.LogicalNotEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpLogicalOr :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.LogicalOr))
-	defer out[start] |= u32(len(out) - start) << 16
+OpLogicalOr :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.LogicalOr))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpLogicalAnd :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.LogicalAnd))
-	defer out[start] |= u32(len(out) - start) << 16
+OpLogicalAnd :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.LogicalAnd))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpLogicalNot :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.LogicalNot))
-	defer out[start] |= u32(len(out) - start) << 16
+OpLogicalNot :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.LogicalNot))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
-write_OpSelect :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, condition: Id, object_1: Id, object_2: Id) {
-	start := len(out)
-	append(out, u32(Op.Select))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSelect :: proc(builder: ^Builder, result_type: Id, condition: Id, object_1: Id, object_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Select))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(condition))
-	append(out, u32(object_1))
-	append(out, u32(object_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(condition))
+	append(&builder.data, u32(object_1))
+	append(&builder.data, u32(object_2))
+	return builder.current_id^
 }
 
-write_OpIEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.IEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpINotEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.INotEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpINotEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.INotEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpUGreaterThan :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.UGreaterThan))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUGreaterThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UGreaterThan))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpSGreaterThan :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.SGreaterThan))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSGreaterThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SGreaterThan))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpUGreaterThanEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.UGreaterThanEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUGreaterThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UGreaterThanEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpSGreaterThanEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.SGreaterThanEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSGreaterThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SGreaterThanEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpULessThan :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.ULessThan))
-	defer out[start] |= u32(len(out) - start) << 16
+OpULessThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ULessThan))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpSLessThan :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.SLessThan))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSLessThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SLessThan))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpULessThanEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.ULessThanEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpULessThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ULessThanEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpSLessThanEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.SLessThanEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSLessThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SLessThanEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFOrdEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FOrdEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFOrdEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FOrdEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFUnordEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FUnordEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFUnordEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FUnordEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFOrdNotEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FOrdNotEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFOrdNotEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FOrdNotEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFUnordNotEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FUnordNotEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFUnordNotEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FUnordNotEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFOrdLessThan :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FOrdLessThan))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFOrdLessThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FOrdLessThan))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFUnordLessThan :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FUnordLessThan))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFUnordLessThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FUnordLessThan))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFOrdGreaterThan :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FOrdGreaterThan))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFOrdGreaterThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FOrdGreaterThan))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFUnordGreaterThan :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FUnordGreaterThan))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFUnordGreaterThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FUnordGreaterThan))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFOrdLessThanEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FOrdLessThanEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFOrdLessThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FOrdLessThanEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFUnordLessThanEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FUnordLessThanEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFUnordLessThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FUnordLessThanEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFOrdGreaterThanEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FOrdGreaterThanEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFOrdGreaterThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FOrdGreaterThanEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpFUnordGreaterThanEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.FUnordGreaterThanEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFUnordGreaterThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FUnordGreaterThanEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpShiftRightLogical :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base: Id, shift: Id) {
-	start := len(out)
-	append(out, u32(Op.ShiftRightLogical))
-	defer out[start] |= u32(len(out) - start) << 16
+OpShiftRightLogical :: proc(builder: ^Builder, result_type: Id, base: Id, shift: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ShiftRightLogical))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base))
-	append(out, u32(shift))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base))
+	append(&builder.data, u32(shift))
+	return builder.current_id^
 }
 
-write_OpShiftRightArithmetic :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base: Id, shift: Id) {
-	start := len(out)
-	append(out, u32(Op.ShiftRightArithmetic))
-	defer out[start] |= u32(len(out) - start) << 16
+OpShiftRightArithmetic :: proc(builder: ^Builder, result_type: Id, base: Id, shift: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ShiftRightArithmetic))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base))
-	append(out, u32(shift))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base))
+	append(&builder.data, u32(shift))
+	return builder.current_id^
 }
 
-write_OpShiftLeftLogical :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base: Id, shift: Id) {
-	start := len(out)
-	append(out, u32(Op.ShiftLeftLogical))
-	defer out[start] |= u32(len(out) - start) << 16
+OpShiftLeftLogical :: proc(builder: ^Builder, result_type: Id, base: Id, shift: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ShiftLeftLogical))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base))
-	append(out, u32(shift))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base))
+	append(&builder.data, u32(shift))
+	return builder.current_id^
 }
 
-write_OpBitwiseOr :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.BitwiseOr))
-	defer out[start] |= u32(len(out) - start) << 16
+OpBitwiseOr :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.BitwiseOr))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpBitwiseXor :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.BitwiseXor))
-	defer out[start] |= u32(len(out) - start) << 16
+OpBitwiseXor :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.BitwiseXor))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpBitwiseAnd :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.BitwiseAnd))
-	defer out[start] |= u32(len(out) - start) << 16
+OpBitwiseAnd :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.BitwiseAnd))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpNot :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.Not))
-	defer out[start] |= u32(len(out) - start) << 16
+OpNot :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Not))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
-write_OpBitFieldInsert :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base: Id, insert: Id, offset: Id, count: Id) {
-	start := len(out)
-	append(out, u32(Op.BitFieldInsert))
-	defer out[start] |= u32(len(out) - start) << 16
+OpBitFieldInsert :: proc(builder: ^Builder, result_type: Id, base: Id, insert: Id, offset: Id, count: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.BitFieldInsert))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base))
-	append(out, u32(insert))
-	append(out, u32(offset))
-	append(out, u32(count))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base))
+	append(&builder.data, u32(insert))
+	append(&builder.data, u32(offset))
+	append(&builder.data, u32(count))
+	return builder.current_id^
 }
 
-write_OpBitFieldSExtract :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base: Id, offset: Id, count: Id) {
-	start := len(out)
-	append(out, u32(Op.BitFieldSExtract))
-	defer out[start] |= u32(len(out) - start) << 16
+OpBitFieldSExtract :: proc(builder: ^Builder, result_type: Id, base: Id, offset: Id, count: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.BitFieldSExtract))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base))
-	append(out, u32(offset))
-	append(out, u32(count))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base))
+	append(&builder.data, u32(offset))
+	append(&builder.data, u32(count))
+	return builder.current_id^
 }
 
-write_OpBitFieldUExtract :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base: Id, offset: Id, count: Id) {
-	start := len(out)
-	append(out, u32(Op.BitFieldUExtract))
-	defer out[start] |= u32(len(out) - start) << 16
+OpBitFieldUExtract :: proc(builder: ^Builder, result_type: Id, base: Id, offset: Id, count: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.BitFieldUExtract))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base))
-	append(out, u32(offset))
-	append(out, u32(count))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base))
+	append(&builder.data, u32(offset))
+	append(&builder.data, u32(count))
+	return builder.current_id^
 }
 
-write_OpBitReverse :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base: Id) {
-	start := len(out)
-	append(out, u32(Op.BitReverse))
-	defer out[start] |= u32(len(out) - start) << 16
+OpBitReverse :: proc(builder: ^Builder, result_type: Id, base: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.BitReverse))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base))
+	return builder.current_id^
 }
 
-write_OpBitCount :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base: Id) {
-	start := len(out)
-	append(out, u32(Op.BitCount))
-	defer out[start] |= u32(len(out) - start) << 16
+OpBitCount :: proc(builder: ^Builder, result_type: Id, base: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.BitCount))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base))
+	return builder.current_id^
 }
 
-write_OpDPdx :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, p: Id) {
-	start := len(out)
-	append(out, u32(Op.DPdx))
-	defer out[start] |= u32(len(out) - start) << 16
+OpDPdx :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.DPdx))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(p))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(p))
+	return builder.current_id^
 }
 
-write_OpDPdy :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, p: Id) {
-	start := len(out)
-	append(out, u32(Op.DPdy))
-	defer out[start] |= u32(len(out) - start) << 16
+OpDPdy :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.DPdy))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(p))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(p))
+	return builder.current_id^
 }
 
-write_OpFwidth :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, p: Id) {
-	start := len(out)
-	append(out, u32(Op.Fwidth))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFwidth :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Fwidth))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(p))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(p))
+	return builder.current_id^
 }
 
-write_OpDPdxFine :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, p: Id) {
-	start := len(out)
-	append(out, u32(Op.DPdxFine))
-	defer out[start] |= u32(len(out) - start) << 16
+OpDPdxFine :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.DPdxFine))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(p))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(p))
+	return builder.current_id^
 }
 
-write_OpDPdyFine :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, p: Id) {
-	start := len(out)
-	append(out, u32(Op.DPdyFine))
-	defer out[start] |= u32(len(out) - start) << 16
+OpDPdyFine :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.DPdyFine))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(p))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(p))
+	return builder.current_id^
 }
 
-write_OpFwidthFine :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, p: Id) {
-	start := len(out)
-	append(out, u32(Op.FwidthFine))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFwidthFine :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FwidthFine))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(p))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(p))
+	return builder.current_id^
 }
 
-write_OpDPdxCoarse :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, p: Id) {
-	start := len(out)
-	append(out, u32(Op.DPdxCoarse))
-	defer out[start] |= u32(len(out) - start) << 16
+OpDPdxCoarse :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.DPdxCoarse))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(p))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(p))
+	return builder.current_id^
 }
 
-write_OpDPdyCoarse :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, p: Id) {
-	start := len(out)
-	append(out, u32(Op.DPdyCoarse))
-	defer out[start] |= u32(len(out) - start) << 16
+OpDPdyCoarse :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.DPdyCoarse))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(p))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(p))
+	return builder.current_id^
 }
 
-write_OpFwidthCoarse :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, p: Id) {
-	start := len(out)
-	append(out, u32(Op.FwidthCoarse))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFwidthCoarse :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FwidthCoarse))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(p))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(p))
+	return builder.current_id^
 }
 
-write_OpEmitVertex :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.EmitVertex))
-	defer out[start] |= u32(len(out) - start) << 16
+OpEmitVertex :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.EmitVertex))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpEndPrimitive :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.EndPrimitive))
-	defer out[start] |= u32(len(out) - start) << 16
+OpEndPrimitive :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.EndPrimitive))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpEmitStreamVertex :: proc(out: ^[dynamic]u32, stream: Id) {
-	start := len(out)
-	append(out, u32(Op.EmitStreamVertex))
-	defer out[start] |= u32(len(out) - start) << 16
+OpEmitStreamVertex :: proc(builder: ^Builder, stream: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.EmitStreamVertex))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(stream))
+	append(&builder.data, u32(stream))
 }
 
-write_OpEndStreamPrimitive :: proc(out: ^[dynamic]u32, stream: Id) {
-	start := len(out)
-	append(out, u32(Op.EndStreamPrimitive))
-	defer out[start] |= u32(len(out) - start) << 16
+OpEndStreamPrimitive :: proc(builder: ^Builder, stream: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.EndStreamPrimitive))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(stream))
+	append(&builder.data, u32(stream))
 }
 
-write_OpControlBarrier :: proc(out: ^[dynamic]u32, execution: Id, memory: Id, semantics: Id) {
-	start := len(out)
-	append(out, u32(Op.ControlBarrier))
-	defer out[start] |= u32(len(out) - start) << 16
+OpControlBarrier :: proc(builder: ^Builder, execution: Id, memory: Id, semantics: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ControlBarrier))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(execution))
-	append(out, u32(memory))
-	append(out, u32(semantics))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
 }
 
-write_OpMemoryBarrier :: proc(out: ^[dynamic]u32, memory: Id, semantics: Id) {
-	start := len(out)
-	append(out, u32(Op.MemoryBarrier))
-	defer out[start] |= u32(len(out) - start) << 16
+OpMemoryBarrier :: proc(builder: ^Builder, memory: Id, semantics: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.MemoryBarrier))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(memory))
-	append(out, u32(semantics))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
 }
 
-write_OpAtomicLoad :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicLoad))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicLoad :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicLoad))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	return builder.current_id^
 }
 
-write_OpAtomicStore :: proc(out: ^[dynamic]u32, pointer: Id, memory: Id, semantics: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicStore))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicStore :: proc(builder: ^Builder, pointer: Id, memory: Id, semantics: Id, value: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicStore))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-	append(out, u32(value))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	append(&builder.data, u32(value))
 }
 
-write_OpAtomicExchange :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicExchange))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicExchange :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicExchange))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpAtomicCompareExchange :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, equal: Id, unequal: Id, value: Id, comparator: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicCompareExchange))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicCompareExchange :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, equal: Id, unequal: Id, value: Id, comparator: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicCompareExchange))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(equal))
-	append(out, u32(unequal))
-	append(out, u32(value))
-	append(out, u32(comparator))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(equal))
+	append(&builder.data, u32(unequal))
+	append(&builder.data, u32(value))
+	append(&builder.data, u32(comparator))
+	return builder.current_id^
 }
 
-write_OpAtomicCompareExchangeWeak :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, equal: Id, unequal: Id, value: Id, comparator: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicCompareExchangeWeak))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicCompareExchangeWeak :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, equal: Id, unequal: Id, value: Id, comparator: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicCompareExchangeWeak))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(equal))
-	append(out, u32(unequal))
-	append(out, u32(value))
-	append(out, u32(comparator))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(equal))
+	append(&builder.data, u32(unequal))
+	append(&builder.data, u32(value))
+	append(&builder.data, u32(comparator))
+	return builder.current_id^
 }
 
-write_OpAtomicIIncrement :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicIIncrement))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicIIncrement :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicIIncrement))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	return builder.current_id^
 }
 
-write_OpAtomicIDecrement :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicIDecrement))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicIDecrement :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicIDecrement))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	return builder.current_id^
 }
 
-write_OpAtomicIAdd :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicIAdd))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicIAdd :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicIAdd))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpAtomicISub :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicISub))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicISub :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicISub))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpAtomicSMin :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicSMin))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicSMin :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicSMin))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpAtomicUMin :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicUMin))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicUMin :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicUMin))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpAtomicSMax :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicSMax))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicSMax :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicSMax))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpAtomicUMax :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicUMax))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicUMax :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicUMax))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpAtomicAnd :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicAnd))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicAnd :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicAnd))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpAtomicOr :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicOr))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicOr :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicOr))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpAtomicXor :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicXor))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicXor :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicXor))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpPhi :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, _operand_2: ..PairIdRefIdRef) {
-	start := len(out)
-	append(out, u32(Op.Phi))
-	defer out[start] |= u32(len(out) - start) << 16
+OpPhi :: proc(builder: ^Builder, result_type: Id, _operand_2: ..[2]Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Phi))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	for _operand_2 in _operand_2 do append(out, transmute(u32)_operand_2)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	for _operand_2 in _operand_2 do append(&builder.data, u32(_operand_2[0]), u32(_operand_2[1]))
+	return builder.current_id^
 }
 
-write_OpLoopMerge :: proc(out: ^[dynamic]u32, merge_block: Id, continue_target: Id, _operand_2: LoopControl) {
-	start := len(out)
-	append(out, u32(Op.LoopMerge))
-	defer out[start] |= u32(len(out) - start) << 16
+OpLoopMerge :: proc(builder: ^Builder, merge_block: Id, continue_target: Id, _operand_2: LoopControl) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.LoopMerge))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(merge_block))
-	append(out, u32(continue_target))
-	append(out, transmute(u32)_operand_2)
+	append(&builder.data, u32(merge_block))
+	append(&builder.data, u32(continue_target))
+	append(&builder.data, transmute(u32)_operand_2)
 }
 
-write_OpSelectionMerge :: proc(out: ^[dynamic]u32, merge_block: Id, _operand_1: SelectionControl) {
-	start := len(out)
-	append(out, u32(Op.SelectionMerge))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSelectionMerge :: proc(builder: ^Builder, merge_block: Id, _operand_1: SelectionControl) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SelectionMerge))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(merge_block))
-	append(out, transmute(u32)_operand_1)
+	append(&builder.data, u32(merge_block))
+	append(&builder.data, transmute(u32)_operand_1)
 }
 
-write_OpLabel :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.Label))
-	defer out[start] |= u32(len(out) - start) << 16
+OpLabel :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Label))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpBranch :: proc(out: ^[dynamic]u32, target_label: Id) {
-	start := len(out)
-	append(out, u32(Op.Branch))
-	defer out[start] |= u32(len(out) - start) << 16
+OpBranch :: proc(builder: ^Builder, target_label: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Branch))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(target_label))
+	append(&builder.data, u32(target_label))
 }
 
-write_OpBranchConditional :: proc(out: ^[dynamic]u32, condition: Id, true_label: Id, false_label: Id, branch_weights: ..u32) {
-	start := len(out)
-	append(out, u32(Op.BranchConditional))
-	defer out[start] |= u32(len(out) - start) << 16
+OpBranchConditional :: proc(builder: ^Builder, condition: Id, true_label: Id, false_label: Id, branch_weights: ..u32) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.BranchConditional))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(condition))
-	append(out, u32(true_label))
-	append(out, u32(false_label))
-	for branch_weights in branch_weights do append(out, u32(branch_weights))
+	append(&builder.data, u32(condition))
+	append(&builder.data, u32(true_label))
+	append(&builder.data, u32(false_label))
+	for branch_weights in branch_weights do append(&builder.data, u32(branch_weights))
 }
 
-write_OpSwitch :: proc(out: ^[dynamic]u32, selector: Id, default: Id, target: ..PairLiteralIntegerIdRef) {
-	start := len(out)
-	append(out, u32(Op.Switch))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSwitch :: proc(builder: ^Builder, selector: Id, default: Id, target: ..struct { literal: u32, id: Id, }) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Switch))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(selector))
-	append(out, u32(default))
-	for target in target do append(out, transmute(u32)target)
+	append(&builder.data, u32(selector))
+	append(&builder.data, u32(default))
+	for target in target do append(&builder.data, u32(target.id), target.literal)
 }
 
-write_OpKill :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.Kill))
-	defer out[start] |= u32(len(out) - start) << 16
+OpKill :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Kill))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpReturn :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.Return))
-	defer out[start] |= u32(len(out) - start) << 16
+OpReturn :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Return))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpReturnValue :: proc(out: ^[dynamic]u32, value: Id) {
-	start := len(out)
-	append(out, u32(Op.ReturnValue))
-	defer out[start] |= u32(len(out) - start) << 16
+OpReturnValue :: proc(builder: ^Builder, value: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ReturnValue))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(value))
+	append(&builder.data, u32(value))
 }
 
-write_OpUnreachable :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.Unreachable))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUnreachable :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Unreachable))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpLifetimeStart :: proc(out: ^[dynamic]u32, pointer: Id, size: u32) {
-	start := len(out)
-	append(out, u32(Op.LifetimeStart))
-	defer out[start] |= u32(len(out) - start) << 16
+OpLifetimeStart :: proc(builder: ^Builder, pointer: Id, size: u32) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.LifetimeStart))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(pointer))
-	append(out, u32(size))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(size))
 }
 
-write_OpLifetimeStop :: proc(out: ^[dynamic]u32, pointer: Id, size: u32) {
-	start := len(out)
-	append(out, u32(Op.LifetimeStop))
-	defer out[start] |= u32(len(out) - start) << 16
+OpLifetimeStop :: proc(builder: ^Builder, pointer: Id, size: u32) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.LifetimeStop))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(pointer))
-	append(out, u32(size))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(size))
 }
 
-write_OpGroupAsyncCopy :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, destination: Id, source: Id, num_elements: Id, stride: Id, event: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupAsyncCopy))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupAsyncCopy :: proc(builder: ^Builder, result_type: Id, execution: Id, destination: Id, source: Id, num_elements: Id, stride: Id, event: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupAsyncCopy))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(destination))
-	append(out, u32(source))
-	append(out, u32(num_elements))
-	append(out, u32(stride))
-	append(out, u32(event))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(destination))
+	append(&builder.data, u32(source))
+	append(&builder.data, u32(num_elements))
+	append(&builder.data, u32(stride))
+	append(&builder.data, u32(event))
+	return builder.current_id^
 }
 
-write_OpGroupWaitEvents :: proc(out: ^[dynamic]u32, execution: Id, num_events: Id, events_list: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupWaitEvents))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupWaitEvents :: proc(builder: ^Builder, execution: Id, num_events: Id, events_list: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupWaitEvents))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(execution))
-	append(out, u32(num_events))
-	append(out, u32(events_list))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(num_events))
+	append(&builder.data, u32(events_list))
 }
 
-write_OpGroupAll :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, predicate: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupAll))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupAll :: proc(builder: ^Builder, result_type: Id, execution: Id, predicate: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupAll))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(predicate))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(predicate))
+	return builder.current_id^
 }
 
-write_OpGroupAny :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, predicate: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupAny))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupAny :: proc(builder: ^Builder, result_type: Id, execution: Id, predicate: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupAny))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(predicate))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(predicate))
+	return builder.current_id^
 }
 
-write_OpGroupBroadcast :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, value: Id, localid: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupBroadcast))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupBroadcast :: proc(builder: ^Builder, result_type: Id, execution: Id, value: Id, localid: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupBroadcast))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(value))
-	append(out, u32(localid))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(value))
+	append(&builder.data, u32(localid))
+	return builder.current_id^
 }
 
-write_OpGroupIAdd :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupIAdd))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupIAdd :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupIAdd))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpGroupFAdd :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupFAdd))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupFAdd :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupFAdd))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpGroupFMin :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupFMin))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupFMin :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupFMin))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpGroupUMin :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupUMin))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupUMin :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupUMin))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpGroupSMin :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupSMin))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupSMin :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupSMin))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpGroupFMax :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupFMax))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupFMax :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupFMax))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpGroupUMax :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupUMax))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupUMax :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupUMax))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpGroupSMax :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupSMax))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupSMax :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupSMax))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpReadPipe :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pipe: Id, pointer: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.ReadPipe))
-	defer out[start] |= u32(len(out) - start) << 16
+OpReadPipe :: proc(builder: ^Builder, result_type: Id, pipe: Id, pointer: Id, packet_size: Id, packet_alignment: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ReadPipe))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pipe))
-	append(out, u32(pointer))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pipe))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
+	return builder.current_id^
 }
 
-write_OpWritePipe :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pipe: Id, pointer: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.WritePipe))
-	defer out[start] |= u32(len(out) - start) << 16
+OpWritePipe :: proc(builder: ^Builder, result_type: Id, pipe: Id, pointer: Id, packet_size: Id, packet_alignment: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.WritePipe))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pipe))
-	append(out, u32(pointer))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pipe))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
+	return builder.current_id^
 }
 
-write_OpReservedReadPipe :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pipe: Id, reserve_id: Id, index: Id, pointer: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.ReservedReadPipe))
-	defer out[start] |= u32(len(out) - start) << 16
+OpReservedReadPipe :: proc(builder: ^Builder, result_type: Id, pipe: Id, reserve_id: Id, index: Id, pointer: Id, packet_size: Id, packet_alignment: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ReservedReadPipe))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pipe))
-	append(out, u32(reserve_id))
-	append(out, u32(index))
-	append(out, u32(pointer))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pipe))
+	append(&builder.data, u32(reserve_id))
+	append(&builder.data, u32(index))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
+	return builder.current_id^
 }
 
-write_OpReservedWritePipe :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pipe: Id, reserve_id: Id, index: Id, pointer: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.ReservedWritePipe))
-	defer out[start] |= u32(len(out) - start) << 16
+OpReservedWritePipe :: proc(builder: ^Builder, result_type: Id, pipe: Id, reserve_id: Id, index: Id, pointer: Id, packet_size: Id, packet_alignment: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ReservedWritePipe))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pipe))
-	append(out, u32(reserve_id))
-	append(out, u32(index))
-	append(out, u32(pointer))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pipe))
+	append(&builder.data, u32(reserve_id))
+	append(&builder.data, u32(index))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
+	return builder.current_id^
 }
 
-write_OpReserveReadPipePackets :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pipe: Id, num_packets: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.ReserveReadPipePackets))
-	defer out[start] |= u32(len(out) - start) << 16
+OpReserveReadPipePackets :: proc(builder: ^Builder, result_type: Id, pipe: Id, num_packets: Id, packet_size: Id, packet_alignment: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ReserveReadPipePackets))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pipe))
-	append(out, u32(num_packets))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pipe))
+	append(&builder.data, u32(num_packets))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
+	return builder.current_id^
 }
 
-write_OpReserveWritePipePackets :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pipe: Id, num_packets: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.ReserveWritePipePackets))
-	defer out[start] |= u32(len(out) - start) << 16
+OpReserveWritePipePackets :: proc(builder: ^Builder, result_type: Id, pipe: Id, num_packets: Id, packet_size: Id, packet_alignment: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ReserveWritePipePackets))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pipe))
-	append(out, u32(num_packets))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pipe))
+	append(&builder.data, u32(num_packets))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
+	return builder.current_id^
 }
 
-write_OpCommitReadPipe :: proc(out: ^[dynamic]u32, pipe: Id, reserve_id: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.CommitReadPipe))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCommitReadPipe :: proc(builder: ^Builder, pipe: Id, reserve_id: Id, packet_size: Id, packet_alignment: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CommitReadPipe))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(pipe))
-	append(out, u32(reserve_id))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
+	append(&builder.data, u32(pipe))
+	append(&builder.data, u32(reserve_id))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
 }
 
-write_OpCommitWritePipe :: proc(out: ^[dynamic]u32, pipe: Id, reserve_id: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.CommitWritePipe))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCommitWritePipe :: proc(builder: ^Builder, pipe: Id, reserve_id: Id, packet_size: Id, packet_alignment: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CommitWritePipe))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(pipe))
-	append(out, u32(reserve_id))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
+	append(&builder.data, u32(pipe))
+	append(&builder.data, u32(reserve_id))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
 }
 
-write_OpIsValidReserveId :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, reserve_id: Id) {
-	start := len(out)
-	append(out, u32(Op.IsValidReserveId))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIsValidReserveId :: proc(builder: ^Builder, result_type: Id, reserve_id: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IsValidReserveId))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(reserve_id))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(reserve_id))
+	return builder.current_id^
 }
 
-write_OpGetNumPipePackets :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pipe: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.GetNumPipePackets))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGetNumPipePackets :: proc(builder: ^Builder, result_type: Id, pipe: Id, packet_size: Id, packet_alignment: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GetNumPipePackets))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pipe))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pipe))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
+	return builder.current_id^
 }
 
-write_OpGetMaxPipePackets :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pipe: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.GetMaxPipePackets))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGetMaxPipePackets :: proc(builder: ^Builder, result_type: Id, pipe: Id, packet_size: Id, packet_alignment: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GetMaxPipePackets))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pipe))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pipe))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
+	return builder.current_id^
 }
 
-write_OpGroupReserveReadPipePackets :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, pipe: Id, num_packets: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupReserveReadPipePackets))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupReserveReadPipePackets :: proc(builder: ^Builder, result_type: Id, execution: Id, pipe: Id, num_packets: Id, packet_size: Id, packet_alignment: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupReserveReadPipePackets))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(pipe))
-	append(out, u32(num_packets))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(pipe))
+	append(&builder.data, u32(num_packets))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
+	return builder.current_id^
 }
 
-write_OpGroupReserveWritePipePackets :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, pipe: Id, num_packets: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupReserveWritePipePackets))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupReserveWritePipePackets :: proc(builder: ^Builder, result_type: Id, execution: Id, pipe: Id, num_packets: Id, packet_size: Id, packet_alignment: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupReserveWritePipePackets))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(pipe))
-	append(out, u32(num_packets))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(pipe))
+	append(&builder.data, u32(num_packets))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
+	return builder.current_id^
 }
 
-write_OpGroupCommitReadPipe :: proc(out: ^[dynamic]u32, execution: Id, pipe: Id, reserve_id: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupCommitReadPipe))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupCommitReadPipe :: proc(builder: ^Builder, execution: Id, pipe: Id, reserve_id: Id, packet_size: Id, packet_alignment: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupCommitReadPipe))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(execution))
-	append(out, u32(pipe))
-	append(out, u32(reserve_id))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(pipe))
+	append(&builder.data, u32(reserve_id))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
 }
 
-write_OpGroupCommitWritePipe :: proc(out: ^[dynamic]u32, execution: Id, pipe: Id, reserve_id: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupCommitWritePipe))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupCommitWritePipe :: proc(builder: ^Builder, execution: Id, pipe: Id, reserve_id: Id, packet_size: Id, packet_alignment: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupCommitWritePipe))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(execution))
-	append(out, u32(pipe))
-	append(out, u32(reserve_id))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(pipe))
+	append(&builder.data, u32(reserve_id))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
 }
 
-write_OpEnqueueMarker :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, queue: Id, num_events: Id, wait_events: Id, ret_event: Id) {
-	start := len(out)
-	append(out, u32(Op.EnqueueMarker))
-	defer out[start] |= u32(len(out) - start) << 16
+OpEnqueueMarker :: proc(builder: ^Builder, result_type: Id, queue: Id, num_events: Id, wait_events: Id, ret_event: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.EnqueueMarker))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(queue))
-	append(out, u32(num_events))
-	append(out, u32(wait_events))
-	append(out, u32(ret_event))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(queue))
+	append(&builder.data, u32(num_events))
+	append(&builder.data, u32(wait_events))
+	append(&builder.data, u32(ret_event))
+	return builder.current_id^
 }
 
-write_OpEnqueueKernel :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, queue: Id, flags: Id, nd_range: Id, num_events: Id, wait_events: Id, ret_event: Id, invoke: Id, param: Id, param_size: Id, param_align: Id, local_size: ..Id) {
-	start := len(out)
-	append(out, u32(Op.EnqueueKernel))
-	defer out[start] |= u32(len(out) - start) << 16
+OpEnqueueKernel :: proc(builder: ^Builder, result_type: Id, queue: Id, flags: Id, nd_range: Id, num_events: Id, wait_events: Id, ret_event: Id, invoke: Id, param: Id, param_size: Id, param_align: Id, local_size: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.EnqueueKernel))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(queue))
-	append(out, u32(flags))
-	append(out, u32(nd_range))
-	append(out, u32(num_events))
-	append(out, u32(wait_events))
-	append(out, u32(ret_event))
-	append(out, u32(invoke))
-	append(out, u32(param))
-	append(out, u32(param_size))
-	append(out, u32(param_align))
-	for local_size in local_size do append(out, u32(local_size))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(queue))
+	append(&builder.data, u32(flags))
+	append(&builder.data, u32(nd_range))
+	append(&builder.data, u32(num_events))
+	append(&builder.data, u32(wait_events))
+	append(&builder.data, u32(ret_event))
+	append(&builder.data, u32(invoke))
+	append(&builder.data, u32(param))
+	append(&builder.data, u32(param_size))
+	append(&builder.data, u32(param_align))
+	for local_size in local_size do append(&builder.data, u32(local_size))
+	return builder.current_id^
 }
 
-write_OpGetKernelNDrangeSubGroupCount :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, nd_range: Id, invoke: Id, param: Id, param_size: Id, param_align: Id) {
-	start := len(out)
-	append(out, u32(Op.GetKernelNDrangeSubGroupCount))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGetKernelNDrangeSubGroupCount :: proc(builder: ^Builder, result_type: Id, nd_range: Id, invoke: Id, param: Id, param_size: Id, param_align: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GetKernelNDrangeSubGroupCount))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(nd_range))
-	append(out, u32(invoke))
-	append(out, u32(param))
-	append(out, u32(param_size))
-	append(out, u32(param_align))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(nd_range))
+	append(&builder.data, u32(invoke))
+	append(&builder.data, u32(param))
+	append(&builder.data, u32(param_size))
+	append(&builder.data, u32(param_align))
+	return builder.current_id^
 }
 
-write_OpGetKernelNDrangeMaxSubGroupSize :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, nd_range: Id, invoke: Id, param: Id, param_size: Id, param_align: Id) {
-	start := len(out)
-	append(out, u32(Op.GetKernelNDrangeMaxSubGroupSize))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGetKernelNDrangeMaxSubGroupSize :: proc(builder: ^Builder, result_type: Id, nd_range: Id, invoke: Id, param: Id, param_size: Id, param_align: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GetKernelNDrangeMaxSubGroupSize))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(nd_range))
-	append(out, u32(invoke))
-	append(out, u32(param))
-	append(out, u32(param_size))
-	append(out, u32(param_align))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(nd_range))
+	append(&builder.data, u32(invoke))
+	append(&builder.data, u32(param))
+	append(&builder.data, u32(param_size))
+	append(&builder.data, u32(param_align))
+	return builder.current_id^
 }
 
-write_OpGetKernelWorkGroupSize :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, invoke: Id, param: Id, param_size: Id, param_align: Id) {
-	start := len(out)
-	append(out, u32(Op.GetKernelWorkGroupSize))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGetKernelWorkGroupSize :: proc(builder: ^Builder, result_type: Id, invoke: Id, param: Id, param_size: Id, param_align: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GetKernelWorkGroupSize))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(invoke))
-	append(out, u32(param))
-	append(out, u32(param_size))
-	append(out, u32(param_align))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(invoke))
+	append(&builder.data, u32(param))
+	append(&builder.data, u32(param_size))
+	append(&builder.data, u32(param_align))
+	return builder.current_id^
 }
 
-write_OpGetKernelPreferredWorkGroupSizeMultiple :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, invoke: Id, param: Id, param_size: Id, param_align: Id) {
-	start := len(out)
-	append(out, u32(Op.GetKernelPreferredWorkGroupSizeMultiple))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGetKernelPreferredWorkGroupSizeMultiple :: proc(builder: ^Builder, result_type: Id, invoke: Id, param: Id, param_size: Id, param_align: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GetKernelPreferredWorkGroupSizeMultiple))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(invoke))
-	append(out, u32(param))
-	append(out, u32(param_size))
-	append(out, u32(param_align))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(invoke))
+	append(&builder.data, u32(param))
+	append(&builder.data, u32(param_size))
+	append(&builder.data, u32(param_align))
+	return builder.current_id^
 }
 
-write_OpRetainEvent :: proc(out: ^[dynamic]u32, event: Id) {
-	start := len(out)
-	append(out, u32(Op.RetainEvent))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRetainEvent :: proc(builder: ^Builder, event: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RetainEvent))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(event))
+	append(&builder.data, u32(event))
 }
 
-write_OpReleaseEvent :: proc(out: ^[dynamic]u32, event: Id) {
-	start := len(out)
-	append(out, u32(Op.ReleaseEvent))
-	defer out[start] |= u32(len(out) - start) << 16
+OpReleaseEvent :: proc(builder: ^Builder, event: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ReleaseEvent))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(event))
+	append(&builder.data, u32(event))
 }
 
-write_OpCreateUserEvent :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.CreateUserEvent))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCreateUserEvent :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CreateUserEvent))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpIsValidEvent :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, event: Id) {
-	start := len(out)
-	append(out, u32(Op.IsValidEvent))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIsValidEvent :: proc(builder: ^Builder, result_type: Id, event: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IsValidEvent))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(event))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(event))
+	return builder.current_id^
 }
 
-write_OpSetUserEventStatus :: proc(out: ^[dynamic]u32, event: Id, status: Id) {
-	start := len(out)
-	append(out, u32(Op.SetUserEventStatus))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSetUserEventStatus :: proc(builder: ^Builder, event: Id, status: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SetUserEventStatus))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(event))
-	append(out, u32(status))
+	append(&builder.data, u32(event))
+	append(&builder.data, u32(status))
 }
 
-write_OpCaptureEventProfilingInfo :: proc(out: ^[dynamic]u32, event: Id, profiling_info: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.CaptureEventProfilingInfo))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCaptureEventProfilingInfo :: proc(builder: ^Builder, event: Id, profiling_info: Id, value: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CaptureEventProfilingInfo))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(event))
-	append(out, u32(profiling_info))
-	append(out, u32(value))
+	append(&builder.data, u32(event))
+	append(&builder.data, u32(profiling_info))
+	append(&builder.data, u32(value))
 }
 
-write_OpGetDefaultQueue :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.GetDefaultQueue))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGetDefaultQueue :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GetDefaultQueue))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpBuildNDRange :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, globalworksize: Id, localworksize: Id, globalworkoffset: Id) {
-	start := len(out)
-	append(out, u32(Op.BuildNDRange))
-	defer out[start] |= u32(len(out) - start) << 16
+OpBuildNDRange :: proc(builder: ^Builder, result_type: Id, globalworksize: Id, localworksize: Id, globalworkoffset: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.BuildNDRange))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(globalworksize))
-	append(out, u32(localworksize))
-	append(out, u32(globalworkoffset))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(globalworksize))
+	append(&builder.data, u32(localworksize))
+	append(&builder.data, u32(globalworkoffset))
+	return builder.current_id^
 }
 
-write_OpImageSparseSampleImplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageSparseSampleImplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSparseSampleImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSparseSampleImplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	return builder.current_id^
 }
 
-write_OpImageSparseSampleExplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands) {
-	start := len(out)
-	append(out, u32(Op.ImageSparseSampleExplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSparseSampleExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSparseSampleExplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, transmute(u32)_operand_4)
+	return builder.current_id^
 }
 
-write_OpImageSparseSampleDrefImplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageSparseSampleDrefImplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSparseSampleDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSparseSampleDrefImplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, u32(d_ref_))
-	if _operand_5, ok := _operand_5.?; ok do append(out, transmute(u32)_operand_5)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(d_ref_))
+	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	return builder.current_id^
 }
 
-write_OpImageSparseSampleDrefExplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands) {
-	start := len(out)
-	append(out, u32(Op.ImageSparseSampleDrefExplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSparseSampleDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSparseSampleDrefExplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, u32(d_ref_))
-	append(out, transmute(u32)_operand_5)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(d_ref_))
+	append(&builder.data, transmute(u32)_operand_5)
+	return builder.current_id^
 }
 
-write_OpImageSparseSampleProjImplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageSparseSampleProjImplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSparseSampleProjImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSparseSampleProjImplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	return builder.current_id^
 }
 
-write_OpImageSparseSampleProjExplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands) {
-	start := len(out)
-	append(out, u32(Op.ImageSparseSampleProjExplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSparseSampleProjExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSparseSampleProjExplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, transmute(u32)_operand_4)
+	return builder.current_id^
 }
 
-write_OpImageSparseSampleProjDrefImplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageSparseSampleProjDrefImplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSparseSampleProjDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSparseSampleProjDrefImplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, u32(d_ref_))
-	if _operand_5, ok := _operand_5.?; ok do append(out, transmute(u32)_operand_5)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(d_ref_))
+	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	return builder.current_id^
 }
 
-write_OpImageSparseSampleProjDrefExplicitLod :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands) {
-	start := len(out)
-	append(out, u32(Op.ImageSparseSampleProjDrefExplicitLod))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSparseSampleProjDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSparseSampleProjDrefExplicitLod))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, u32(d_ref_))
-	append(out, transmute(u32)_operand_5)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(d_ref_))
+	append(&builder.data, transmute(u32)_operand_5)
+	return builder.current_id^
 }
 
-write_OpImageSparseFetch :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageSparseFetch))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSparseFetch :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSparseFetch))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
-	append(out, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	append(&builder.data, u32(coordinate))
+	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	return builder.current_id^
 }
 
-write_OpImageSparseGather :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, component: Id, _operand_5: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageSparseGather))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSparseGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, component: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSparseGather))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, u32(component))
-	if _operand_5, ok := _operand_5.?; ok do append(out, transmute(u32)_operand_5)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(component))
+	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	return builder.current_id^
 }
 
-write_OpImageSparseDrefGather :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageSparseDrefGather))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSparseDrefGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSparseDrefGather))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, u32(d_ref_))
-	if _operand_5, ok := _operand_5.?; ok do append(out, transmute(u32)_operand_5)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(d_ref_))
+	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	return builder.current_id^
 }
 
-write_OpImageSparseTexelsResident :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, resident_code: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageSparseTexelsResident))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSparseTexelsResident :: proc(builder: ^Builder, result_type: Id, resident_code: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSparseTexelsResident))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(resident_code))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(resident_code))
+	return builder.current_id^
 }
 
-write_OpNoLine :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.NoLine))
-	defer out[start] |= u32(len(out) - start) << 16
+OpNoLine :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.NoLine))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpAtomicFlagTestAndSet :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicFlagTestAndSet))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicFlagTestAndSet :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicFlagTestAndSet))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	return builder.current_id^
 }
 
-write_OpAtomicFlagClear :: proc(out: ^[dynamic]u32, pointer: Id, memory: Id, semantics: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicFlagClear))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicFlagClear :: proc(builder: ^Builder, pointer: Id, memory: Id, semantics: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicFlagClear))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
 }
 
-write_OpImageSparseRead :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageSparseRead))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSparseRead :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSparseRead))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
-	append(out, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	append(&builder.data, u32(coordinate))
+	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	return builder.current_id^
 }
 
-write_OpSizeOf :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id) {
-	start := len(out)
-	append(out, u32(Op.SizeOf))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSizeOf :: proc(builder: ^Builder, result_type: Id, pointer: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SizeOf))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	return builder.current_id^
 }
 
-write_OpTypePipeStorage :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypePipeStorage))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypePipeStorage :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypePipeStorage))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpConstantPipeStorage :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, packet_size: u32, packet_alignment: u32, capacity: u32) {
-	start := len(out)
-	append(out, u32(Op.ConstantPipeStorage))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConstantPipeStorage :: proc(builder: ^Builder, result_type: Id, packet_size: u32, packet_alignment: u32, capacity: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConstantPipeStorage))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
-	append(out, u32(capacity))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
+	append(&builder.data, u32(capacity))
+	return builder.current_id^
 }
 
-write_OpCreatePipeFromPipeStorage :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pipe_storage: Id) {
-	start := len(out)
-	append(out, u32(Op.CreatePipeFromPipeStorage))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCreatePipeFromPipeStorage :: proc(builder: ^Builder, result_type: Id, pipe_storage: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CreatePipeFromPipeStorage))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pipe_storage))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pipe_storage))
+	return builder.current_id^
 }
 
-write_OpGetKernelLocalSizeForSubgroupCount :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, subgroup_count: Id, invoke: Id, param: Id, param_size: Id, param_align: Id) {
-	start := len(out)
-	append(out, u32(Op.GetKernelLocalSizeForSubgroupCount))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGetKernelLocalSizeForSubgroupCount :: proc(builder: ^Builder, result_type: Id, subgroup_count: Id, invoke: Id, param: Id, param_size: Id, param_align: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GetKernelLocalSizeForSubgroupCount))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(subgroup_count))
-	append(out, u32(invoke))
-	append(out, u32(param))
-	append(out, u32(param_size))
-	append(out, u32(param_align))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(subgroup_count))
+	append(&builder.data, u32(invoke))
+	append(&builder.data, u32(param))
+	append(&builder.data, u32(param_size))
+	append(&builder.data, u32(param_align))
+	return builder.current_id^
 }
 
-write_OpGetKernelMaxNumSubgroups :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, invoke: Id, param: Id, param_size: Id, param_align: Id) {
-	start := len(out)
-	append(out, u32(Op.GetKernelMaxNumSubgroups))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGetKernelMaxNumSubgroups :: proc(builder: ^Builder, result_type: Id, invoke: Id, param: Id, param_size: Id, param_align: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GetKernelMaxNumSubgroups))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(invoke))
-	append(out, u32(param))
-	append(out, u32(param_size))
-	append(out, u32(param_align))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(invoke))
+	append(&builder.data, u32(param))
+	append(&builder.data, u32(param_size))
+	append(&builder.data, u32(param_align))
+	return builder.current_id^
 }
 
-write_OpTypeNamedBarrier :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeNamedBarrier))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeNamedBarrier :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeNamedBarrier))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpNamedBarrierInitialize :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, subgroup_count: Id) {
-	start := len(out)
-	append(out, u32(Op.NamedBarrierInitialize))
-	defer out[start] |= u32(len(out) - start) << 16
+OpNamedBarrierInitialize :: proc(builder: ^Builder, result_type: Id, subgroup_count: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.NamedBarrierInitialize))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(subgroup_count))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(subgroup_count))
+	return builder.current_id^
 }
 
-write_OpMemoryNamedBarrier :: proc(out: ^[dynamic]u32, named_barrier: Id, memory: Id, semantics: Id) {
-	start := len(out)
-	append(out, u32(Op.MemoryNamedBarrier))
-	defer out[start] |= u32(len(out) - start) << 16
+OpMemoryNamedBarrier :: proc(builder: ^Builder, named_barrier: Id, memory: Id, semantics: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.MemoryNamedBarrier))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(named_barrier))
-	append(out, u32(memory))
-	append(out, u32(semantics))
+	append(&builder.data, u32(named_barrier))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
 }
 
-write_OpModuleProcessed :: proc(out: ^[dynamic]u32, process: string) {
-	start := len(out)
-	append(out, u32(Op.ModuleProcessed))
-	defer out[start] |= u32(len(out) - start) << 16
+OpModuleProcessed :: proc(builder: ^Builder, process: string) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ModuleProcessed))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	write_string(out, process)
+	write_string(&builder.data, process)
 }
 
-write_OpExecutionModeId :: proc(out: ^[dynamic]u32, entry_point: Id, mode: ExecutionMode) {
-	start := len(out)
-	append(out, u32(Op.ExecutionModeId))
-	defer out[start] |= u32(len(out) - start) << 16
+OpExecutionModeId :: proc(builder: ^Builder, entry_point: Id, mode: ExecutionMode) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ExecutionModeId))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(entry_point))
-	append(out, transmute(u32)mode)
+	append(&builder.data, u32(entry_point))
+	append(&builder.data, transmute(u32)mode)
 }
 
-write_OpDecorateId :: proc(out: ^[dynamic]u32, target: Id, _operand_1: Decoration) {
-	start := len(out)
-	append(out, u32(Op.DecorateId))
-	defer out[start] |= u32(len(out) - start) << 16
+OpDecorateId :: proc(builder: ^Builder, target: Id, _operand_1: Decoration) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.DecorateId))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(target))
-	append(out, transmute(u32)_operand_1)
+	append(&builder.data, u32(target))
+	append(&builder.data, transmute(u32)_operand_1)
 }
 
-write_OpGroupNonUniformElect :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformElect))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformElect :: proc(builder: ^Builder, result_type: Id, execution: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformElect))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformAll :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, predicate: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformAll))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformAll :: proc(builder: ^Builder, result_type: Id, execution: Id, predicate: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformAll))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(predicate))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(predicate))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformAny :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, predicate: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformAny))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformAny :: proc(builder: ^Builder, result_type: Id, execution: Id, predicate: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformAny))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(predicate))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(predicate))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformAllEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformAllEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformAllEqual :: proc(builder: ^Builder, result_type: Id, execution: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformAllEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformBroadcast :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, value: Id, invocation_id: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformBroadcast))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformBroadcast :: proc(builder: ^Builder, result_type: Id, execution: Id, value: Id, invocation_id: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformBroadcast))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(value))
-	append(out, u32(invocation_id))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(value))
+	append(&builder.data, u32(invocation_id))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformBroadcastFirst :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformBroadcastFirst))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformBroadcastFirst :: proc(builder: ^Builder, result_type: Id, execution: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformBroadcastFirst))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformBallot :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, predicate: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformBallot))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformBallot :: proc(builder: ^Builder, result_type: Id, execution: Id, predicate: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformBallot))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(predicate))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(predicate))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformInverseBallot :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformInverseBallot))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformInverseBallot :: proc(builder: ^Builder, result_type: Id, execution: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformInverseBallot))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformBallotBitExtract :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, value: Id, index: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformBallotBitExtract))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformBallotBitExtract :: proc(builder: ^Builder, result_type: Id, execution: Id, value: Id, index: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformBallotBitExtract))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(value))
-	append(out, u32(index))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(value))
+	append(&builder.data, u32(index))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformBallotBitCount :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformBallotBitCount))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformBallotBitCount :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformBallotBitCount))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformBallotFindLSB :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformBallotFindLSB))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformBallotFindLSB :: proc(builder: ^Builder, result_type: Id, execution: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformBallotFindLSB))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformBallotFindMSB :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformBallotFindMSB))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformBallotFindMSB :: proc(builder: ^Builder, result_type: Id, execution: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformBallotFindMSB))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformShuffle :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, value: Id, invocation_id: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformShuffle))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformShuffle :: proc(builder: ^Builder, result_type: Id, execution: Id, value: Id, invocation_id: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformShuffle))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(value))
-	append(out, u32(invocation_id))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(value))
+	append(&builder.data, u32(invocation_id))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformShuffleXor :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, value: Id, mask: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformShuffleXor))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformShuffleXor :: proc(builder: ^Builder, result_type: Id, execution: Id, value: Id, mask: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformShuffleXor))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(value))
-	append(out, u32(mask))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(value))
+	append(&builder.data, u32(mask))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformShuffleUp :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, value: Id, delta: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformShuffleUp))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformShuffleUp :: proc(builder: ^Builder, result_type: Id, execution: Id, value: Id, delta: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformShuffleUp))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(value))
-	append(out, u32(delta))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(value))
+	append(&builder.data, u32(delta))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformShuffleDown :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, value: Id, delta: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformShuffleDown))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformShuffleDown :: proc(builder: ^Builder, result_type: Id, execution: Id, value: Id, delta: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformShuffleDown))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(value))
-	append(out, u32(delta))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(value))
+	append(&builder.data, u32(delta))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformIAdd :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformIAdd))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformIAdd :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformIAdd))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformFAdd :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformFAdd))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformFAdd :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformFAdd))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformIMul :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformIMul))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformIMul :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformIMul))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformFMul :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformFMul))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformFMul :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformFMul))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformSMin :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformSMin))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformSMin :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformSMin))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformUMin :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformUMin))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformUMin :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformUMin))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformFMin :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformFMin))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformFMin :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformFMin))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformSMax :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformSMax))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformSMax :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformSMax))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformUMax :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformUMax))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformUMax :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformUMax))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformFMax :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformFMax))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformFMax :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformFMax))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformBitwiseAnd :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformBitwiseAnd))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformBitwiseAnd :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformBitwiseAnd))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformBitwiseOr :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformBitwiseOr))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformBitwiseOr :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformBitwiseOr))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformBitwiseXor :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformBitwiseXor))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformBitwiseXor :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformBitwiseXor))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformLogicalAnd :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformLogicalAnd))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformLogicalAnd :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformLogicalAnd))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformLogicalOr :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformLogicalOr))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformLogicalOr :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformLogicalOr))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformLogicalXor :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformLogicalXor))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformLogicalXor :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, value: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformLogicalXor))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(value))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformQuadBroadcast :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, value: Id, index: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformQuadBroadcast))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformQuadBroadcast :: proc(builder: ^Builder, result_type: Id, execution: Id, value: Id, index: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformQuadBroadcast))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(value))
-	append(out, u32(index))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(value))
+	append(&builder.data, u32(index))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformQuadSwap :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, value: Id, direction: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformQuadSwap))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformQuadSwap :: proc(builder: ^Builder, result_type: Id, execution: Id, value: Id, direction: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformQuadSwap))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(value))
-	append(out, u32(direction))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(value))
+	append(&builder.data, u32(direction))
+	return builder.current_id^
 }
 
-write_OpCopyLogical :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.CopyLogical))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCopyLogical :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CopyLogical))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
-write_OpPtrEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.PtrEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpPtrEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.PtrEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpPtrNotEqual :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.PtrNotEqual))
-	defer out[start] |= u32(len(out) - start) << 16
+OpPtrNotEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.PtrNotEqual))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpPtrDiff :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.PtrDiff))
-	defer out[start] |= u32(len(out) - start) << 16
+OpPtrDiff :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.PtrDiff))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpColorAttachmentReadEXT :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, attachment: Id, sample: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.ColorAttachmentReadEXT))
-	defer out[start] |= u32(len(out) - start) << 16
+OpColorAttachmentReadEXT :: proc(builder: ^Builder, result_type: Id, attachment: Id, sample: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ColorAttachmentReadEXT))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(attachment))
-	if sample, ok := sample.?; ok do append(out, u32(sample))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(attachment))
+	if sample, ok := sample.?; ok do append(&builder.data, u32(sample))
+	return builder.current_id^
 }
 
-write_OpDepthAttachmentReadEXT :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sample: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.DepthAttachmentReadEXT))
-	defer out[start] |= u32(len(out) - start) << 16
+OpDepthAttachmentReadEXT :: proc(builder: ^Builder, result_type: Id, sample: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.DepthAttachmentReadEXT))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	if sample, ok := sample.?; ok do append(out, u32(sample))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	if sample, ok := sample.?; ok do append(&builder.data, u32(sample))
+	return builder.current_id^
 }
 
-write_OpStencilAttachmentReadEXT :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sample: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.StencilAttachmentReadEXT))
-	defer out[start] |= u32(len(out) - start) << 16
+OpStencilAttachmentReadEXT :: proc(builder: ^Builder, result_type: Id, sample: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.StencilAttachmentReadEXT))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	if sample, ok := sample.?; ok do append(out, u32(sample))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	if sample, ok := sample.?; ok do append(&builder.data, u32(sample))
+	return builder.current_id^
 }
 
-write_OpTypeTensorARM :: proc(out: ^[dynamic]u32, result: Id, element_type: Id, rank: Maybe(Id) = nil, shape: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.TypeTensorARM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeTensorARM :: proc(builder: ^Builder, element_type: Id, rank: Maybe(Id) = nil, shape: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeTensorARM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(element_type))
-	if rank, ok := rank.?; ok do append(out, u32(rank))
-	if shape, ok := shape.?; ok do append(out, u32(shape))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(element_type))
+	if rank, ok := rank.?; ok do append(&builder.data, u32(rank))
+	if shape, ok := shape.?; ok do append(&builder.data, u32(shape))
+	return builder.current_id^
 }
 
-write_OpTensorReadARM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, tensor: Id, coordinates: Id, _operand_4: Maybe(TensorOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.TensorReadARM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTensorReadARM :: proc(builder: ^Builder, result_type: Id, tensor: Id, coordinates: Id, _operand_4: Maybe(TensorOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TensorReadARM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(tensor))
-	append(out, u32(coordinates))
-	if _operand_4, ok := _operand_4.?; ok do append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(tensor))
+	append(&builder.data, u32(coordinates))
+	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	return builder.current_id^
 }
 
-write_OpTensorWriteARM :: proc(out: ^[dynamic]u32, tensor: Id, coordinates: Id, object: Id, _operand_3: Maybe(TensorOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.TensorWriteARM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTensorWriteARM :: proc(builder: ^Builder, tensor: Id, coordinates: Id, object: Id, _operand_3: Maybe(TensorOperands) = nil) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TensorWriteARM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(tensor))
-	append(out, u32(coordinates))
-	append(out, u32(object))
-	if _operand_3, ok := _operand_3.?; ok do append(out, transmute(u32)_operand_3)
+	append(&builder.data, u32(tensor))
+	append(&builder.data, u32(coordinates))
+	append(&builder.data, u32(object))
+	if _operand_3, ok := _operand_3.?; ok do append(&builder.data, transmute(u32)_operand_3)
 }
 
-write_OpTensorQuerySizeARM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, tensor: Id, dimension: Id) {
-	start := len(out)
-	append(out, u32(Op.TensorQuerySizeARM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTensorQuerySizeARM :: proc(builder: ^Builder, result_type: Id, tensor: Id, dimension: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TensorQuerySizeARM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(tensor))
-	append(out, u32(dimension))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(tensor))
+	append(&builder.data, u32(dimension))
+	return builder.current_id^
 }
 
-write_OpGraphConstantARM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, graphconstantid: u32) {
-	start := len(out)
-	append(out, u32(Op.GraphConstantARM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGraphConstantARM :: proc(builder: ^Builder, result_type: Id, graphconstantid: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GraphConstantARM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(graphconstantid))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(graphconstantid))
+	return builder.current_id^
 }
 
-write_OpGraphEntryPointARM :: proc(out: ^[dynamic]u32, graph: Id, name: string, interface: ..Id) {
-	start := len(out)
-	append(out, u32(Op.GraphEntryPointARM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGraphEntryPointARM :: proc(builder: ^Builder, graph: Id, name: string, interface: ..Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GraphEntryPointARM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(graph))
-	write_string(out, name)
-	for interface in interface do append(out, u32(interface))
+	append(&builder.data, u32(graph))
+	write_string(&builder.data, name)
+	for interface in interface do append(&builder.data, u32(interface))
 }
 
-write_OpGraphARM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.GraphARM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGraphARM :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GraphARM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpGraphInputARM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, inputindex: Id, elementindex: ..Id) {
-	start := len(out)
-	append(out, u32(Op.GraphInputARM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGraphInputARM :: proc(builder: ^Builder, result_type: Id, inputindex: Id, elementindex: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GraphInputARM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(inputindex))
-	for elementindex in elementindex do append(out, u32(elementindex))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(inputindex))
+	for elementindex in elementindex do append(&builder.data, u32(elementindex))
+	return builder.current_id^
 }
 
-write_OpGraphSetOutputARM :: proc(out: ^[dynamic]u32, value: Id, outputindex: Id, elementindex: ..Id) {
-	start := len(out)
-	append(out, u32(Op.GraphSetOutputARM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGraphSetOutputARM :: proc(builder: ^Builder, value: Id, outputindex: Id, elementindex: ..Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GraphSetOutputARM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(value))
-	append(out, u32(outputindex))
-	for elementindex in elementindex do append(out, u32(elementindex))
+	append(&builder.data, u32(value))
+	append(&builder.data, u32(outputindex))
+	for elementindex in elementindex do append(&builder.data, u32(elementindex))
 }
 
-write_OpGraphEndARM :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.GraphEndARM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGraphEndARM :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GraphEndARM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpTypeGraphARM :: proc(out: ^[dynamic]u32, result: Id, numinputs: u32, inouttypes: ..Id) {
-	start := len(out)
-	append(out, u32(Op.TypeGraphARM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeGraphARM :: proc(builder: ^Builder, numinputs: u32, inouttypes: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeGraphARM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(numinputs))
-	for inouttypes in inouttypes do append(out, u32(inouttypes))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(numinputs))
+	for inouttypes in inouttypes do append(&builder.data, u32(inouttypes))
+	return builder.current_id^
 }
 
-write_OpTerminateInvocation :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.TerminateInvocation))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTerminateInvocation :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TerminateInvocation))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpTypeUntypedPointerKHR :: proc(out: ^[dynamic]u32, result: Id, _operand_1: StorageClass) {
-	start := len(out)
-	append(out, u32(Op.TypeUntypedPointerKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeUntypedPointerKHR :: proc(builder: ^Builder, _operand_1: StorageClass) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeUntypedPointerKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, transmute(u32)_operand_1)
+	append(&builder.data, next_id(builder))
+	append(&builder.data, transmute(u32)_operand_1)
+	return builder.current_id^
 }
 
-write_OpUntypedVariableKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, _operand_2: StorageClass, data_type: Maybe(Id) = nil, initializer: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.UntypedVariableKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUntypedVariableKHR :: proc(builder: ^Builder, result_type: Id, _operand_2: StorageClass, data_type: Maybe(Id) = nil, initializer: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UntypedVariableKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, transmute(u32)_operand_2)
-	if data_type, ok := data_type.?; ok do append(out, u32(data_type))
-	if initializer, ok := initializer.?; ok do append(out, u32(initializer))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, transmute(u32)_operand_2)
+	if data_type, ok := data_type.?; ok do append(&builder.data, u32(data_type))
+	if initializer, ok := initializer.?; ok do append(&builder.data, u32(initializer))
+	return builder.current_id^
 }
 
-write_OpUntypedAccessChainKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base_type: Id, base: Id, indexes: ..Id) {
-	start := len(out)
-	append(out, u32(Op.UntypedAccessChainKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUntypedAccessChainKHR :: proc(builder: ^Builder, result_type: Id, base_type: Id, base: Id, indexes: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UntypedAccessChainKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base_type))
-	append(out, u32(base))
-	for indexes in indexes do append(out, u32(indexes))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base_type))
+	append(&builder.data, u32(base))
+	for indexes in indexes do append(&builder.data, u32(indexes))
+	return builder.current_id^
 }
 
-write_OpUntypedInBoundsAccessChainKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base_type: Id, base: Id, indexes: ..Id) {
-	start := len(out)
-	append(out, u32(Op.UntypedInBoundsAccessChainKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUntypedInBoundsAccessChainKHR :: proc(builder: ^Builder, result_type: Id, base_type: Id, base: Id, indexes: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UntypedInBoundsAccessChainKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base_type))
-	append(out, u32(base))
-	for indexes in indexes do append(out, u32(indexes))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base_type))
+	append(&builder.data, u32(base))
+	for indexes in indexes do append(&builder.data, u32(indexes))
+	return builder.current_id^
 }
 
-write_OpSubgroupBallotKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, predicate: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupBallotKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupBallotKHR :: proc(builder: ^Builder, result_type: Id, predicate: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupBallotKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(predicate))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(predicate))
+	return builder.current_id^
 }
 
-write_OpSubgroupFirstInvocationKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupFirstInvocationKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupFirstInvocationKHR :: proc(builder: ^Builder, result_type: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupFirstInvocationKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpUntypedPtrAccessChainKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base_type: Id, base: Id, element: Id, indexes: ..Id) {
-	start := len(out)
-	append(out, u32(Op.UntypedPtrAccessChainKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUntypedPtrAccessChainKHR :: proc(builder: ^Builder, result_type: Id, base_type: Id, base: Id, element: Id, indexes: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UntypedPtrAccessChainKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base_type))
-	append(out, u32(base))
-	append(out, u32(element))
-	for indexes in indexes do append(out, u32(indexes))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base_type))
+	append(&builder.data, u32(base))
+	append(&builder.data, u32(element))
+	for indexes in indexes do append(&builder.data, u32(indexes))
+	return builder.current_id^
 }
 
-write_OpUntypedInBoundsPtrAccessChainKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base_type: Id, base: Id, element: Id, indexes: ..Id) {
-	start := len(out)
-	append(out, u32(Op.UntypedInBoundsPtrAccessChainKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUntypedInBoundsPtrAccessChainKHR :: proc(builder: ^Builder, result_type: Id, base_type: Id, base: Id, element: Id, indexes: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UntypedInBoundsPtrAccessChainKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base_type))
-	append(out, u32(base))
-	append(out, u32(element))
-	for indexes in indexes do append(out, u32(indexes))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base_type))
+	append(&builder.data, u32(base))
+	append(&builder.data, u32(element))
+	for indexes in indexes do append(&builder.data, u32(indexes))
+	return builder.current_id^
 }
 
-write_OpUntypedArrayLengthKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, structure: Id, pointer: Id, array_member: u32) {
-	start := len(out)
-	append(out, u32(Op.UntypedArrayLengthKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUntypedArrayLengthKHR :: proc(builder: ^Builder, result_type: Id, structure: Id, pointer: Id, array_member: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UntypedArrayLengthKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(structure))
-	append(out, u32(pointer))
-	append(out, u32(array_member))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(structure))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(array_member))
+	return builder.current_id^
 }
 
-write_OpUntypedPrefetchKHR :: proc(out: ^[dynamic]u32, pointer_type: Id, num_bytes: Id, rw: Maybe(Id) = nil, locality: Maybe(Id) = nil, cache_type: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.UntypedPrefetchKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUntypedPrefetchKHR :: proc(builder: ^Builder, pointer_type: Id, num_bytes: Id, rw: Maybe(Id) = nil, locality: Maybe(Id) = nil, cache_type: Maybe(Id) = nil) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UntypedPrefetchKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(pointer_type))
-	append(out, u32(num_bytes))
-	if rw, ok := rw.?; ok do append(out, u32(rw))
-	if locality, ok := locality.?; ok do append(out, u32(locality))
-	if cache_type, ok := cache_type.?; ok do append(out, u32(cache_type))
+	append(&builder.data, u32(pointer_type))
+	append(&builder.data, u32(num_bytes))
+	if rw, ok := rw.?; ok do append(&builder.data, u32(rw))
+	if locality, ok := locality.?; ok do append(&builder.data, u32(locality))
+	if cache_type, ok := cache_type.?; ok do append(&builder.data, u32(cache_type))
 }
 
-write_OpSubgroupAllKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, predicate: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAllKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAllKHR :: proc(builder: ^Builder, result_type: Id, predicate: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAllKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(predicate))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(predicate))
+	return builder.current_id^
 }
 
-write_OpSubgroupAnyKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, predicate: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAnyKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAnyKHR :: proc(builder: ^Builder, result_type: Id, predicate: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAnyKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(predicate))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(predicate))
+	return builder.current_id^
 }
 
-write_OpSubgroupAllEqualKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, predicate: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAllEqualKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAllEqualKHR :: proc(builder: ^Builder, result_type: Id, predicate: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAllEqualKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(predicate))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(predicate))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformRotateKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, value: Id, delta: Id, clustersize: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformRotateKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformRotateKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, value: Id, delta: Id, clustersize: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformRotateKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(value))
-	append(out, u32(delta))
-	if clustersize, ok := clustersize.?; ok do append(out, u32(clustersize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(value))
+	append(&builder.data, u32(delta))
+	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	return builder.current_id^
 }
 
-write_OpSubgroupReadInvocationKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, value: Id, index: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupReadInvocationKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupReadInvocationKHR :: proc(builder: ^Builder, result_type: Id, value: Id, index: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupReadInvocationKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(value))
-	append(out, u32(index))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(value))
+	append(&builder.data, u32(index))
+	return builder.current_id^
 }
 
-write_OpExtInstWithForwardRefsKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, set: Id, instruction: u32, _operand_4: ..Id) {
-	start := len(out)
-	append(out, u32(Op.ExtInstWithForwardRefsKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpExtInstWithForwardRefsKHR :: proc(builder: ^Builder, result_type: Id, set: Id, instruction: u32, _operand_4: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ExtInstWithForwardRefsKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(set))
-	append(out, u32(instruction))
-	for _operand_4 in _operand_4 do append(out, u32(_operand_4))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(set))
+	append(&builder.data, u32(instruction))
+	for _operand_4 in _operand_4 do append(&builder.data, u32(_operand_4))
+	return builder.current_id^
 }
 
-write_OpUntypedGroupAsyncCopyKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, destination: Id, source: Id, element_num_bytes: Id, num_elements: Id, stride: Id, event: Id, destination_memory_operands: Maybe(MemoryAccess) = nil, source_memory_operands: Maybe(MemoryAccess) = nil) {
-	start := len(out)
-	append(out, u32(Op.UntypedGroupAsyncCopyKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUntypedGroupAsyncCopyKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, destination: Id, source: Id, element_num_bytes: Id, num_elements: Id, stride: Id, event: Id, destination_memory_operands: Maybe(MemoryAccess) = nil, source_memory_operands: Maybe(MemoryAccess) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UntypedGroupAsyncCopyKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, u32(destination))
-	append(out, u32(source))
-	append(out, u32(element_num_bytes))
-	append(out, u32(num_elements))
-	append(out, u32(stride))
-	append(out, u32(event))
-	if destination_memory_operands, ok := destination_memory_operands.?; ok do append(out, transmute(u32)destination_memory_operands)
-	if source_memory_operands, ok := source_memory_operands.?; ok do append(out, transmute(u32)source_memory_operands)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(destination))
+	append(&builder.data, u32(source))
+	append(&builder.data, u32(element_num_bytes))
+	append(&builder.data, u32(num_elements))
+	append(&builder.data, u32(stride))
+	append(&builder.data, u32(event))
+	if destination_memory_operands, ok := destination_memory_operands.?; ok do append(&builder.data, transmute(u32)destination_memory_operands)
+	if source_memory_operands, ok := source_memory_operands.?; ok do append(&builder.data, transmute(u32)source_memory_operands)
+	return builder.current_id^
 }
 
-write_OpTraceRayKHR :: proc(out: ^[dynamic]u32, accel: Id, ray_flags: Id, cull_mask: Id, sbt_offset: Id, sbt_stride: Id, miss_index: Id, ray_origin: Id, ray_tmin: Id, ray_direction: Id, ray_tmax: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.TraceRayKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTraceRayKHR :: proc(builder: ^Builder, accel: Id, ray_flags: Id, cull_mask: Id, sbt_offset: Id, sbt_stride: Id, miss_index: Id, ray_origin: Id, ray_tmin: Id, ray_direction: Id, ray_tmax: Id, payload: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TraceRayKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(accel))
-	append(out, u32(ray_flags))
-	append(out, u32(cull_mask))
-	append(out, u32(sbt_offset))
-	append(out, u32(sbt_stride))
-	append(out, u32(miss_index))
-	append(out, u32(ray_origin))
-	append(out, u32(ray_tmin))
-	append(out, u32(ray_direction))
-	append(out, u32(ray_tmax))
-	append(out, u32(payload))
+	append(&builder.data, u32(accel))
+	append(&builder.data, u32(ray_flags))
+	append(&builder.data, u32(cull_mask))
+	append(&builder.data, u32(sbt_offset))
+	append(&builder.data, u32(sbt_stride))
+	append(&builder.data, u32(miss_index))
+	append(&builder.data, u32(ray_origin))
+	append(&builder.data, u32(ray_tmin))
+	append(&builder.data, u32(ray_direction))
+	append(&builder.data, u32(ray_tmax))
+	append(&builder.data, u32(payload))
 }
 
-write_OpExecuteCallableKHR :: proc(out: ^[dynamic]u32, sbt_index: Id, callable_data: Id) {
-	start := len(out)
-	append(out, u32(Op.ExecuteCallableKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpExecuteCallableKHR :: proc(builder: ^Builder, sbt_index: Id, callable_data: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ExecuteCallableKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(sbt_index))
-	append(out, u32(callable_data))
+	append(&builder.data, u32(sbt_index))
+	append(&builder.data, u32(callable_data))
 }
 
-write_OpConvertUToAccelerationStructureKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, accel: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertUToAccelerationStructureKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConvertUToAccelerationStructureKHR :: proc(builder: ^Builder, result_type: Id, accel: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertUToAccelerationStructureKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(accel))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(accel))
+	return builder.current_id^
 }
 
-write_OpIgnoreIntersectionKHR :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.IgnoreIntersectionKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIgnoreIntersectionKHR :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IgnoreIntersectionKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpTerminateRayKHR :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.TerminateRayKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTerminateRayKHR :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TerminateRayKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpSDot :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, vector_1: Id, vector_2: Id, packed_vector_format: Maybe(PackedVectorFormat) = nil) {
-	start := len(out)
-	append(out, u32(Op.SDot))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSDot :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2: Id, packed_vector_format: Maybe(PackedVectorFormat) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SDot))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(vector_1))
-	append(out, u32(vector_2))
-	if packed_vector_format, ok := packed_vector_format.?; ok do append(out, transmute(u32)packed_vector_format)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(vector_1))
+	append(&builder.data, u32(vector_2))
+	if packed_vector_format, ok := packed_vector_format.?; ok do append(&builder.data, transmute(u32)packed_vector_format)
+	return builder.current_id^
 }
 
-write_OpUDot :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, vector_1: Id, vector_2: Id, packed_vector_format: Maybe(PackedVectorFormat) = nil) {
-	start := len(out)
-	append(out, u32(Op.UDot))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUDot :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2: Id, packed_vector_format: Maybe(PackedVectorFormat) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UDot))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(vector_1))
-	append(out, u32(vector_2))
-	if packed_vector_format, ok := packed_vector_format.?; ok do append(out, transmute(u32)packed_vector_format)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(vector_1))
+	append(&builder.data, u32(vector_2))
+	if packed_vector_format, ok := packed_vector_format.?; ok do append(&builder.data, transmute(u32)packed_vector_format)
+	return builder.current_id^
 }
 
-write_OpSUDot :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, vector_1: Id, vector_2: Id, packed_vector_format: Maybe(PackedVectorFormat) = nil) {
-	start := len(out)
-	append(out, u32(Op.SUDot))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSUDot :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2: Id, packed_vector_format: Maybe(PackedVectorFormat) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SUDot))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(vector_1))
-	append(out, u32(vector_2))
-	if packed_vector_format, ok := packed_vector_format.?; ok do append(out, transmute(u32)packed_vector_format)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(vector_1))
+	append(&builder.data, u32(vector_2))
+	if packed_vector_format, ok := packed_vector_format.?; ok do append(&builder.data, transmute(u32)packed_vector_format)
+	return builder.current_id^
 }
 
-write_OpSDotAccSat :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, vector_1: Id, vector_2: Id, accumulator: Id, packed_vector_format: Maybe(PackedVectorFormat) = nil) {
-	start := len(out)
-	append(out, u32(Op.SDotAccSat))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSDotAccSat :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2: Id, accumulator: Id, packed_vector_format: Maybe(PackedVectorFormat) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SDotAccSat))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(vector_1))
-	append(out, u32(vector_2))
-	append(out, u32(accumulator))
-	if packed_vector_format, ok := packed_vector_format.?; ok do append(out, transmute(u32)packed_vector_format)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(vector_1))
+	append(&builder.data, u32(vector_2))
+	append(&builder.data, u32(accumulator))
+	if packed_vector_format, ok := packed_vector_format.?; ok do append(&builder.data, transmute(u32)packed_vector_format)
+	return builder.current_id^
 }
 
-write_OpUDotAccSat :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, vector_1: Id, vector_2: Id, accumulator: Id, packed_vector_format: Maybe(PackedVectorFormat) = nil) {
-	start := len(out)
-	append(out, u32(Op.UDotAccSat))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUDotAccSat :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2: Id, accumulator: Id, packed_vector_format: Maybe(PackedVectorFormat) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UDotAccSat))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(vector_1))
-	append(out, u32(vector_2))
-	append(out, u32(accumulator))
-	if packed_vector_format, ok := packed_vector_format.?; ok do append(out, transmute(u32)packed_vector_format)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(vector_1))
+	append(&builder.data, u32(vector_2))
+	append(&builder.data, u32(accumulator))
+	if packed_vector_format, ok := packed_vector_format.?; ok do append(&builder.data, transmute(u32)packed_vector_format)
+	return builder.current_id^
 }
 
-write_OpSUDotAccSat :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, vector_1: Id, vector_2: Id, accumulator: Id, packed_vector_format: Maybe(PackedVectorFormat) = nil) {
-	start := len(out)
-	append(out, u32(Op.SUDotAccSat))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSUDotAccSat :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2: Id, accumulator: Id, packed_vector_format: Maybe(PackedVectorFormat) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SUDotAccSat))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(vector_1))
-	append(out, u32(vector_2))
-	append(out, u32(accumulator))
-	if packed_vector_format, ok := packed_vector_format.?; ok do append(out, transmute(u32)packed_vector_format)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(vector_1))
+	append(&builder.data, u32(vector_2))
+	append(&builder.data, u32(accumulator))
+	if packed_vector_format, ok := packed_vector_format.?; ok do append(&builder.data, transmute(u32)packed_vector_format)
+	return builder.current_id^
 }
 
-write_OpTypeCooperativeMatrixKHR :: proc(out: ^[dynamic]u32, result: Id, component_type: Id, scope: Id, rows: Id, columns: Id, use: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeCooperativeMatrixKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeCooperativeMatrixKHR :: proc(builder: ^Builder, component_type: Id, scope: Id, rows: Id, columns: Id, use: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeCooperativeMatrixKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(component_type))
-	append(out, u32(scope))
-	append(out, u32(rows))
-	append(out, u32(columns))
-	append(out, u32(use))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(component_type))
+	append(&builder.data, u32(scope))
+	append(&builder.data, u32(rows))
+	append(&builder.data, u32(columns))
+	append(&builder.data, u32(use))
+	return builder.current_id^
 }
 
-write_OpCooperativeMatrixLoadKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memorylayout: Id, stride: Maybe(Id) = nil, memory_operand: Maybe(MemoryAccess) = nil) {
-	start := len(out)
-	append(out, u32(Op.CooperativeMatrixLoadKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeMatrixLoadKHR :: proc(builder: ^Builder, result_type: Id, pointer: Id, memorylayout: Id, stride: Maybe(Id) = nil, memory_operand: Maybe(MemoryAccess) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeMatrixLoadKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memorylayout))
-	if stride, ok := stride.?; ok do append(out, u32(stride))
-	if memory_operand, ok := memory_operand.?; ok do append(out, transmute(u32)memory_operand)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memorylayout))
+	if stride, ok := stride.?; ok do append(&builder.data, u32(stride))
+	if memory_operand, ok := memory_operand.?; ok do append(&builder.data, transmute(u32)memory_operand)
+	return builder.current_id^
 }
 
-write_OpCooperativeMatrixStoreKHR :: proc(out: ^[dynamic]u32, pointer: Id, object: Id, memorylayout: Id, stride: Maybe(Id) = nil, memory_operand: Maybe(MemoryAccess) = nil) {
-	start := len(out)
-	append(out, u32(Op.CooperativeMatrixStoreKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeMatrixStoreKHR :: proc(builder: ^Builder, pointer: Id, object: Id, memorylayout: Id, stride: Maybe(Id) = nil, memory_operand: Maybe(MemoryAccess) = nil) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeMatrixStoreKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(pointer))
-	append(out, u32(object))
-	append(out, u32(memorylayout))
-	if stride, ok := stride.?; ok do append(out, u32(stride))
-	if memory_operand, ok := memory_operand.?; ok do append(out, transmute(u32)memory_operand)
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(object))
+	append(&builder.data, u32(memorylayout))
+	if stride, ok := stride.?; ok do append(&builder.data, u32(stride))
+	if memory_operand, ok := memory_operand.?; ok do append(&builder.data, transmute(u32)memory_operand)
 }
 
-write_OpCooperativeMatrixMulAddKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, b: Id, c: Id, cooperative_matrix_operands: Maybe(CooperativeMatrixOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.CooperativeMatrixMulAddKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeMatrixMulAddKHR :: proc(builder: ^Builder, result_type: Id, a: Id, b: Id, c: Id, cooperative_matrix_operands: Maybe(CooperativeMatrixOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeMatrixMulAddKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(b))
-	append(out, u32(c))
-	if cooperative_matrix_operands, ok := cooperative_matrix_operands.?; ok do append(out, transmute(u32)cooperative_matrix_operands)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(c))
+	if cooperative_matrix_operands, ok := cooperative_matrix_operands.?; ok do append(&builder.data, transmute(u32)cooperative_matrix_operands)
+	return builder.current_id^
 }
 
-write_OpCooperativeMatrixLengthKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, type: Id) {
-	start := len(out)
-	append(out, u32(Op.CooperativeMatrixLengthKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeMatrixLengthKHR :: proc(builder: ^Builder, result_type: Id, type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeMatrixLengthKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(type))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(type))
+	return builder.current_id^
 }
 
-write_OpConstantCompositeReplicateEXT :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.ConstantCompositeReplicateEXT))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConstantCompositeReplicateEXT :: proc(builder: ^Builder, result_type: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConstantCompositeReplicateEXT))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpSpecConstantCompositeReplicateEXT :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.SpecConstantCompositeReplicateEXT))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSpecConstantCompositeReplicateEXT :: proc(builder: ^Builder, result_type: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SpecConstantCompositeReplicateEXT))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpCompositeConstructReplicateEXT :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.CompositeConstructReplicateEXT))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCompositeConstructReplicateEXT :: proc(builder: ^Builder, result_type: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CompositeConstructReplicateEXT))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpTypeRayQueryKHR :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeRayQueryKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeRayQueryKHR :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeRayQueryKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpRayQueryInitializeKHR :: proc(out: ^[dynamic]u32, rayquery: Id, accel: Id, rayflags: Id, cullmask: Id, rayorigin: Id, raytmin: Id, raydirection: Id, raytmax: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryInitializeKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRayQueryInitializeKHR :: proc(builder: ^Builder, rayquery: Id, accel: Id, rayflags: Id, cullmask: Id, rayorigin: Id, raytmin: Id, raydirection: Id, raytmax: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryInitializeKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(rayquery))
-	append(out, u32(accel))
-	append(out, u32(rayflags))
-	append(out, u32(cullmask))
-	append(out, u32(rayorigin))
-	append(out, u32(raytmin))
-	append(out, u32(raydirection))
-	append(out, u32(raytmax))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(accel))
+	append(&builder.data, u32(rayflags))
+	append(&builder.data, u32(cullmask))
+	append(&builder.data, u32(rayorigin))
+	append(&builder.data, u32(raytmin))
+	append(&builder.data, u32(raydirection))
+	append(&builder.data, u32(raytmax))
 }
 
-write_OpRayQueryTerminateKHR :: proc(out: ^[dynamic]u32, rayquery: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryTerminateKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRayQueryTerminateKHR :: proc(builder: ^Builder, rayquery: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryTerminateKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(rayquery))
+	append(&builder.data, u32(rayquery))
 }
 
-write_OpRayQueryGenerateIntersectionKHR :: proc(out: ^[dynamic]u32, rayquery: Id, hitt: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGenerateIntersectionKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRayQueryGenerateIntersectionKHR :: proc(builder: ^Builder, rayquery: Id, hitt: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGenerateIntersectionKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(rayquery))
-	append(out, u32(hitt))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(hitt))
 }
 
-write_OpRayQueryConfirmIntersectionKHR :: proc(out: ^[dynamic]u32, rayquery: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryConfirmIntersectionKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRayQueryConfirmIntersectionKHR :: proc(builder: ^Builder, rayquery: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryConfirmIntersectionKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(rayquery))
+	append(&builder.data, u32(rayquery))
 }
 
-write_OpRayQueryProceedKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryProceedKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRayQueryProceedKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryProceedKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	return builder.current_id^
 }
 
-write_OpRayQueryGetIntersectionTypeKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionTypeKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRayQueryGetIntersectionTypeKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionTypeKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
 }
 
-write_OpImageSampleWeightedQCOM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, texture: Id, coordinates: Id, weights: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageSampleWeightedQCOM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSampleWeightedQCOM :: proc(builder: ^Builder, result_type: Id, texture: Id, coordinates: Id, weights: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSampleWeightedQCOM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(texture))
-	append(out, u32(coordinates))
-	append(out, u32(weights))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(texture))
+	append(&builder.data, u32(coordinates))
+	append(&builder.data, u32(weights))
+	return builder.current_id^
 }
 
-write_OpImageBoxFilterQCOM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, texture: Id, coordinates: Id, box_size: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageBoxFilterQCOM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageBoxFilterQCOM :: proc(builder: ^Builder, result_type: Id, texture: Id, coordinates: Id, box_size: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageBoxFilterQCOM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(texture))
-	append(out, u32(coordinates))
-	append(out, u32(box_size))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(texture))
+	append(&builder.data, u32(coordinates))
+	append(&builder.data, u32(box_size))
+	return builder.current_id^
 }
 
-write_OpImageBlockMatchSSDQCOM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, target: Id, target_coordinates: Id, reference: Id, reference_coordinates: Id, block_size: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageBlockMatchSSDQCOM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageBlockMatchSSDQCOM :: proc(builder: ^Builder, result_type: Id, target: Id, target_coordinates: Id, reference: Id, reference_coordinates: Id, block_size: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageBlockMatchSSDQCOM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(target))
-	append(out, u32(target_coordinates))
-	append(out, u32(reference))
-	append(out, u32(reference_coordinates))
-	append(out, u32(block_size))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(target))
+	append(&builder.data, u32(target_coordinates))
+	append(&builder.data, u32(reference))
+	append(&builder.data, u32(reference_coordinates))
+	append(&builder.data, u32(block_size))
+	return builder.current_id^
 }
 
-write_OpImageBlockMatchSADQCOM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, target: Id, target_coordinates: Id, reference: Id, reference_coordinates: Id, block_size: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageBlockMatchSADQCOM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageBlockMatchSADQCOM :: proc(builder: ^Builder, result_type: Id, target: Id, target_coordinates: Id, reference: Id, reference_coordinates: Id, block_size: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageBlockMatchSADQCOM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(target))
-	append(out, u32(target_coordinates))
-	append(out, u32(reference))
-	append(out, u32(reference_coordinates))
-	append(out, u32(block_size))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(target))
+	append(&builder.data, u32(target_coordinates))
+	append(&builder.data, u32(reference))
+	append(&builder.data, u32(reference_coordinates))
+	append(&builder.data, u32(block_size))
+	return builder.current_id^
 }
 
-write_OpBitCastArrayQCOM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, source_array: Id) {
-	start := len(out)
-	append(out, u32(Op.BitCastArrayQCOM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpBitCastArrayQCOM :: proc(builder: ^Builder, result_type: Id, source_array: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.BitCastArrayQCOM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(source_array))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(source_array))
+	return builder.current_id^
 }
 
-write_OpImageBlockMatchWindowSSDQCOM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, target_sampled_image: Id, target_coordinates: Id, reference_sampled_image: Id, reference_coordinates: Id, block_size: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageBlockMatchWindowSSDQCOM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageBlockMatchWindowSSDQCOM :: proc(builder: ^Builder, result_type: Id, target_sampled_image: Id, target_coordinates: Id, reference_sampled_image: Id, reference_coordinates: Id, block_size: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageBlockMatchWindowSSDQCOM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(target_sampled_image))
-	append(out, u32(target_coordinates))
-	append(out, u32(reference_sampled_image))
-	append(out, u32(reference_coordinates))
-	append(out, u32(block_size))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(target_sampled_image))
+	append(&builder.data, u32(target_coordinates))
+	append(&builder.data, u32(reference_sampled_image))
+	append(&builder.data, u32(reference_coordinates))
+	append(&builder.data, u32(block_size))
+	return builder.current_id^
 }
 
-write_OpImageBlockMatchWindowSADQCOM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, target_sampled_image: Id, target_coordinates: Id, reference_sampled_image: Id, reference_coordinates: Id, block_size: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageBlockMatchWindowSADQCOM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageBlockMatchWindowSADQCOM :: proc(builder: ^Builder, result_type: Id, target_sampled_image: Id, target_coordinates: Id, reference_sampled_image: Id, reference_coordinates: Id, block_size: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageBlockMatchWindowSADQCOM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(target_sampled_image))
-	append(out, u32(target_coordinates))
-	append(out, u32(reference_sampled_image))
-	append(out, u32(reference_coordinates))
-	append(out, u32(block_size))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(target_sampled_image))
+	append(&builder.data, u32(target_coordinates))
+	append(&builder.data, u32(reference_sampled_image))
+	append(&builder.data, u32(reference_coordinates))
+	append(&builder.data, u32(block_size))
+	return builder.current_id^
 }
 
-write_OpImageBlockMatchGatherSSDQCOM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, target_sampled_image: Id, target_coordinates: Id, reference_sampled_image: Id, reference_coordinates: Id, block_size: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageBlockMatchGatherSSDQCOM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageBlockMatchGatherSSDQCOM :: proc(builder: ^Builder, result_type: Id, target_sampled_image: Id, target_coordinates: Id, reference_sampled_image: Id, reference_coordinates: Id, block_size: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageBlockMatchGatherSSDQCOM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(target_sampled_image))
-	append(out, u32(target_coordinates))
-	append(out, u32(reference_sampled_image))
-	append(out, u32(reference_coordinates))
-	append(out, u32(block_size))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(target_sampled_image))
+	append(&builder.data, u32(target_coordinates))
+	append(&builder.data, u32(reference_sampled_image))
+	append(&builder.data, u32(reference_coordinates))
+	append(&builder.data, u32(block_size))
+	return builder.current_id^
 }
 
-write_OpImageBlockMatchGatherSADQCOM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, target_sampled_image: Id, target_coordinates: Id, reference_sampled_image: Id, reference_coordinates: Id, block_size: Id) {
-	start := len(out)
-	append(out, u32(Op.ImageBlockMatchGatherSADQCOM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageBlockMatchGatherSADQCOM :: proc(builder: ^Builder, result_type: Id, target_sampled_image: Id, target_coordinates: Id, reference_sampled_image: Id, reference_coordinates: Id, block_size: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageBlockMatchGatherSADQCOM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(target_sampled_image))
-	append(out, u32(target_coordinates))
-	append(out, u32(reference_sampled_image))
-	append(out, u32(reference_coordinates))
-	append(out, u32(block_size))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(target_sampled_image))
+	append(&builder.data, u32(target_coordinates))
+	append(&builder.data, u32(reference_sampled_image))
+	append(&builder.data, u32(reference_coordinates))
+	append(&builder.data, u32(block_size))
+	return builder.current_id^
 }
 
-write_OpCompositeConstructCoopMatQCOM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, source_array: Id) {
-	start := len(out)
-	append(out, u32(Op.CompositeConstructCoopMatQCOM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCompositeConstructCoopMatQCOM :: proc(builder: ^Builder, result_type: Id, source_array: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CompositeConstructCoopMatQCOM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(source_array))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(source_array))
+	return builder.current_id^
 }
 
-write_OpCompositeExtractCoopMatQCOM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, source_cooperative_matrix: Id) {
-	start := len(out)
-	append(out, u32(Op.CompositeExtractCoopMatQCOM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCompositeExtractCoopMatQCOM :: proc(builder: ^Builder, result_type: Id, source_cooperative_matrix: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CompositeExtractCoopMatQCOM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(source_cooperative_matrix))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(source_cooperative_matrix))
+	return builder.current_id^
 }
 
-write_OpExtractSubArrayQCOM :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, source_array: Id, index: Id) {
-	start := len(out)
-	append(out, u32(Op.ExtractSubArrayQCOM))
-	defer out[start] |= u32(len(out) - start) << 16
+OpExtractSubArrayQCOM :: proc(builder: ^Builder, result_type: Id, source_array: Id, index: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ExtractSubArrayQCOM))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(source_array))
-	append(out, u32(index))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(source_array))
+	append(&builder.data, u32(index))
+	return builder.current_id^
 }
 
-write_OpGroupIAddNonUniformAMD :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupIAddNonUniformAMD))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupIAddNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupIAddNonUniformAMD))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpGroupFAddNonUniformAMD :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupFAddNonUniformAMD))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupFAddNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupFAddNonUniformAMD))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpGroupFMinNonUniformAMD :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupFMinNonUniformAMD))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupFMinNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupFMinNonUniformAMD))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpGroupUMinNonUniformAMD :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupUMinNonUniformAMD))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupUMinNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupUMinNonUniformAMD))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpGroupSMinNonUniformAMD :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupSMinNonUniformAMD))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupSMinNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupSMinNonUniformAMD))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpGroupFMaxNonUniformAMD :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupFMaxNonUniformAMD))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupFMaxNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupFMaxNonUniformAMD))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpGroupUMaxNonUniformAMD :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupUMaxNonUniformAMD))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupUMaxNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupUMaxNonUniformAMD))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpGroupSMaxNonUniformAMD :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupSMaxNonUniformAMD))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupSMaxNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupSMaxNonUniformAMD))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
 }
 
-write_OpFragmentMaskFetchAMD :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id, coordinate: Id) {
-	start := len(out)
-	append(out, u32(Op.FragmentMaskFetchAMD))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFragmentMaskFetchAMD :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FragmentMaskFetchAMD))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
-	append(out, u32(coordinate))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	append(&builder.data, u32(coordinate))
+	return builder.current_id^
 }
 
-write_OpFragmentFetchAMD :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id, coordinate: Id, fragment_index: Id) {
-	start := len(out)
-	append(out, u32(Op.FragmentFetchAMD))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFragmentFetchAMD :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, fragment_index: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FragmentFetchAMD))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
-	append(out, u32(coordinate))
-	append(out, u32(fragment_index))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(fragment_index))
+	return builder.current_id^
 }
 
-write_OpReadClockKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, scope: Id) {
-	start := len(out)
-	append(out, u32(Op.ReadClockKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpReadClockKHR :: proc(builder: ^Builder, result_type: Id, scope: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ReadClockKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(scope))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(scope))
+	return builder.current_id^
 }
 
-write_OpAllocateNodePayloadsAMDX :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, visibility: Id, payload_count: Id, node_index: Id) {
-	start := len(out)
-	append(out, u32(Op.AllocateNodePayloadsAMDX))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAllocateNodePayloadsAMDX :: proc(builder: ^Builder, result_type: Id, visibility: Id, payload_count: Id, node_index: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AllocateNodePayloadsAMDX))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(visibility))
-	append(out, u32(payload_count))
-	append(out, u32(node_index))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(visibility))
+	append(&builder.data, u32(payload_count))
+	append(&builder.data, u32(node_index))
+	return builder.current_id^
 }
 
-write_OpEnqueueNodePayloadsAMDX :: proc(out: ^[dynamic]u32, payload_array: Id) {
-	start := len(out)
-	append(out, u32(Op.EnqueueNodePayloadsAMDX))
-	defer out[start] |= u32(len(out) - start) << 16
+OpEnqueueNodePayloadsAMDX :: proc(builder: ^Builder, payload_array: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.EnqueueNodePayloadsAMDX))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(payload_array))
+	append(&builder.data, u32(payload_array))
 }
 
-write_OpTypeNodePayloadArrayAMDX :: proc(out: ^[dynamic]u32, result: Id, payload_type: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeNodePayloadArrayAMDX))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeNodePayloadArrayAMDX :: proc(builder: ^Builder, payload_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeNodePayloadArrayAMDX))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(payload_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload_type))
+	return builder.current_id^
 }
 
-write_OpFinishWritingNodePayloadAMDX :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.FinishWritingNodePayloadAMDX))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFinishWritingNodePayloadAMDX :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FinishWritingNodePayloadAMDX))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpNodePayloadArrayLengthAMDX :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload_array: Id) {
-	start := len(out)
-	append(out, u32(Op.NodePayloadArrayLengthAMDX))
-	defer out[start] |= u32(len(out) - start) << 16
+OpNodePayloadArrayLengthAMDX :: proc(builder: ^Builder, result_type: Id, payload_array: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.NodePayloadArrayLengthAMDX))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload_array))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload_array))
+	return builder.current_id^
 }
 
-write_OpIsNodePayloadValidAMDX :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload_type: Id, node_index: Id) {
-	start := len(out)
-	append(out, u32(Op.IsNodePayloadValidAMDX))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIsNodePayloadValidAMDX :: proc(builder: ^Builder, result_type: Id, payload_type: Id, node_index: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IsNodePayloadValidAMDX))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload_type))
-	append(out, u32(node_index))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload_type))
+	append(&builder.data, u32(node_index))
+	return builder.current_id^
 }
 
-write_OpConstantStringAMDX :: proc(out: ^[dynamic]u32, result: Id, literal_string: string) {
-	start := len(out)
-	append(out, u32(Op.ConstantStringAMDX))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConstantStringAMDX :: proc(builder: ^Builder, literal_string: string) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConstantStringAMDX))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	write_string(out, literal_string)
+	append(&builder.data, next_id(builder))
+	write_string(&builder.data, literal_string)
+	return builder.current_id^
 }
 
-write_OpSpecConstantStringAMDX :: proc(out: ^[dynamic]u32, result: Id, literal_string: string) {
-	start := len(out)
-	append(out, u32(Op.SpecConstantStringAMDX))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSpecConstantStringAMDX :: proc(builder: ^Builder, literal_string: string) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SpecConstantStringAMDX))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	write_string(out, literal_string)
+	append(&builder.data, next_id(builder))
+	write_string(&builder.data, literal_string)
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformQuadAllKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, predicate: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformQuadAllKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformQuadAllKHR :: proc(builder: ^Builder, result_type: Id, predicate: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformQuadAllKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(predicate))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(predicate))
+	return builder.current_id^
 }
 
-write_OpGroupNonUniformQuadAnyKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, predicate: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformQuadAnyKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformQuadAnyKHR :: proc(builder: ^Builder, result_type: Id, predicate: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformQuadAnyKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(predicate))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(predicate))
+	return builder.current_id^
 }
 
-write_OpHitObjectRecordHitMotionNV :: proc(out: ^[dynamic]u32, hit_object: Id, acceleration_structure: Id, instanceid: Id, primitiveid: Id, geometryindex: Id, hit_kind: Id, sbt_record_offset: Id, sbt_record_stride: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, current_time: Id, hitobject_attributes: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectRecordHitMotionNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectRecordHitMotionNV :: proc(builder: ^Builder, hit_object: Id, acceleration_structure: Id, instanceid: Id, primitiveid: Id, geometryindex: Id, hit_kind: Id, sbt_record_offset: Id, sbt_record_stride: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, current_time: Id, hitobject_attributes: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectRecordHitMotionNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(hit_object))
-	append(out, u32(acceleration_structure))
-	append(out, u32(instanceid))
-	append(out, u32(primitiveid))
-	append(out, u32(geometryindex))
-	append(out, u32(hit_kind))
-	append(out, u32(sbt_record_offset))
-	append(out, u32(sbt_record_stride))
-	append(out, u32(origin))
-	append(out, u32(tmin))
-	append(out, u32(direction))
-	append(out, u32(tmax))
-	append(out, u32(current_time))
-	append(out, u32(hitobject_attributes))
+	append(&builder.data, u32(hit_object))
+	append(&builder.data, u32(acceleration_structure))
+	append(&builder.data, u32(instanceid))
+	append(&builder.data, u32(primitiveid))
+	append(&builder.data, u32(geometryindex))
+	append(&builder.data, u32(hit_kind))
+	append(&builder.data, u32(sbt_record_offset))
+	append(&builder.data, u32(sbt_record_stride))
+	append(&builder.data, u32(origin))
+	append(&builder.data, u32(tmin))
+	append(&builder.data, u32(direction))
+	append(&builder.data, u32(tmax))
+	append(&builder.data, u32(current_time))
+	append(&builder.data, u32(hitobject_attributes))
 }
 
-write_OpHitObjectRecordHitWithIndexMotionNV :: proc(out: ^[dynamic]u32, hit_object: Id, acceleration_structure: Id, instanceid: Id, primitiveid: Id, geometryindex: Id, hit_kind: Id, sbt_record_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, current_time: Id, hitobject_attributes: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectRecordHitWithIndexMotionNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectRecordHitWithIndexMotionNV :: proc(builder: ^Builder, hit_object: Id, acceleration_structure: Id, instanceid: Id, primitiveid: Id, geometryindex: Id, hit_kind: Id, sbt_record_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, current_time: Id, hitobject_attributes: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectRecordHitWithIndexMotionNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(hit_object))
-	append(out, u32(acceleration_structure))
-	append(out, u32(instanceid))
-	append(out, u32(primitiveid))
-	append(out, u32(geometryindex))
-	append(out, u32(hit_kind))
-	append(out, u32(sbt_record_index))
-	append(out, u32(origin))
-	append(out, u32(tmin))
-	append(out, u32(direction))
-	append(out, u32(tmax))
-	append(out, u32(current_time))
-	append(out, u32(hitobject_attributes))
+	append(&builder.data, u32(hit_object))
+	append(&builder.data, u32(acceleration_structure))
+	append(&builder.data, u32(instanceid))
+	append(&builder.data, u32(primitiveid))
+	append(&builder.data, u32(geometryindex))
+	append(&builder.data, u32(hit_kind))
+	append(&builder.data, u32(sbt_record_index))
+	append(&builder.data, u32(origin))
+	append(&builder.data, u32(tmin))
+	append(&builder.data, u32(direction))
+	append(&builder.data, u32(tmax))
+	append(&builder.data, u32(current_time))
+	append(&builder.data, u32(hitobject_attributes))
 }
 
-write_OpHitObjectRecordMissMotionNV :: proc(out: ^[dynamic]u32, hit_object: Id, sbt_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, current_time: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectRecordMissMotionNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectRecordMissMotionNV :: proc(builder: ^Builder, hit_object: Id, sbt_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, current_time: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectRecordMissMotionNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(hit_object))
-	append(out, u32(sbt_index))
-	append(out, u32(origin))
-	append(out, u32(tmin))
-	append(out, u32(direction))
-	append(out, u32(tmax))
-	append(out, u32(current_time))
+	append(&builder.data, u32(hit_object))
+	append(&builder.data, u32(sbt_index))
+	append(&builder.data, u32(origin))
+	append(&builder.data, u32(tmin))
+	append(&builder.data, u32(direction))
+	append(&builder.data, u32(tmax))
+	append(&builder.data, u32(current_time))
 }
 
-write_OpHitObjectGetWorldToObjectNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetWorldToObjectNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetWorldToObjectNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetWorldToObjectNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetObjectToWorldNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetObjectToWorldNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetObjectToWorldNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetObjectToWorldNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetObjectRayDirectionNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetObjectRayDirectionNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetObjectRayDirectionNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetObjectRayDirectionNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetObjectRayOriginNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetObjectRayOriginNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetObjectRayOriginNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetObjectRayOriginNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectTraceRayMotionNV :: proc(out: ^[dynamic]u32, hit_object: Id, acceleration_structure: Id, rayflags: Id, cullmask: Id, sbt_record_offset: Id, sbt_record_stride: Id, miss_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, time: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectTraceRayMotionNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectTraceRayMotionNV :: proc(builder: ^Builder, hit_object: Id, acceleration_structure: Id, rayflags: Id, cullmask: Id, sbt_record_offset: Id, sbt_record_stride: Id, miss_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, time: Id, payload: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectTraceRayMotionNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(hit_object))
-	append(out, u32(acceleration_structure))
-	append(out, u32(rayflags))
-	append(out, u32(cullmask))
-	append(out, u32(sbt_record_offset))
-	append(out, u32(sbt_record_stride))
-	append(out, u32(miss_index))
-	append(out, u32(origin))
-	append(out, u32(tmin))
-	append(out, u32(direction))
-	append(out, u32(tmax))
-	append(out, u32(time))
-	append(out, u32(payload))
+	append(&builder.data, u32(hit_object))
+	append(&builder.data, u32(acceleration_structure))
+	append(&builder.data, u32(rayflags))
+	append(&builder.data, u32(cullmask))
+	append(&builder.data, u32(sbt_record_offset))
+	append(&builder.data, u32(sbt_record_stride))
+	append(&builder.data, u32(miss_index))
+	append(&builder.data, u32(origin))
+	append(&builder.data, u32(tmin))
+	append(&builder.data, u32(direction))
+	append(&builder.data, u32(tmax))
+	append(&builder.data, u32(time))
+	append(&builder.data, u32(payload))
 }
 
-write_OpHitObjectGetShaderRecordBufferHandleNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetShaderRecordBufferHandleNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetShaderRecordBufferHandleNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetShaderRecordBufferHandleNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetShaderBindingTableRecordIndexNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetShaderBindingTableRecordIndexNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetShaderBindingTableRecordIndexNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetShaderBindingTableRecordIndexNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectRecordEmptyNV :: proc(out: ^[dynamic]u32, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectRecordEmptyNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectRecordEmptyNV :: proc(builder: ^Builder, hit_object: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectRecordEmptyNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(hit_object))
+	append(&builder.data, u32(hit_object))
 }
 
-write_OpHitObjectTraceRayNV :: proc(out: ^[dynamic]u32, hit_object: Id, acceleration_structure: Id, rayflags: Id, cullmask: Id, sbt_record_offset: Id, sbt_record_stride: Id, miss_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectTraceRayNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectTraceRayNV :: proc(builder: ^Builder, hit_object: Id, acceleration_structure: Id, rayflags: Id, cullmask: Id, sbt_record_offset: Id, sbt_record_stride: Id, miss_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, payload: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectTraceRayNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(hit_object))
-	append(out, u32(acceleration_structure))
-	append(out, u32(rayflags))
-	append(out, u32(cullmask))
-	append(out, u32(sbt_record_offset))
-	append(out, u32(sbt_record_stride))
-	append(out, u32(miss_index))
-	append(out, u32(origin))
-	append(out, u32(tmin))
-	append(out, u32(direction))
-	append(out, u32(tmax))
-	append(out, u32(payload))
+	append(&builder.data, u32(hit_object))
+	append(&builder.data, u32(acceleration_structure))
+	append(&builder.data, u32(rayflags))
+	append(&builder.data, u32(cullmask))
+	append(&builder.data, u32(sbt_record_offset))
+	append(&builder.data, u32(sbt_record_stride))
+	append(&builder.data, u32(miss_index))
+	append(&builder.data, u32(origin))
+	append(&builder.data, u32(tmin))
+	append(&builder.data, u32(direction))
+	append(&builder.data, u32(tmax))
+	append(&builder.data, u32(payload))
 }
 
-write_OpHitObjectRecordHitNV :: proc(out: ^[dynamic]u32, hit_object: Id, acceleration_structure: Id, instanceid: Id, primitiveid: Id, geometryindex: Id, hit_kind: Id, sbt_record_offset: Id, sbt_record_stride: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, hitobject_attributes: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectRecordHitNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectRecordHitNV :: proc(builder: ^Builder, hit_object: Id, acceleration_structure: Id, instanceid: Id, primitiveid: Id, geometryindex: Id, hit_kind: Id, sbt_record_offset: Id, sbt_record_stride: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, hitobject_attributes: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectRecordHitNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(hit_object))
-	append(out, u32(acceleration_structure))
-	append(out, u32(instanceid))
-	append(out, u32(primitiveid))
-	append(out, u32(geometryindex))
-	append(out, u32(hit_kind))
-	append(out, u32(sbt_record_offset))
-	append(out, u32(sbt_record_stride))
-	append(out, u32(origin))
-	append(out, u32(tmin))
-	append(out, u32(direction))
-	append(out, u32(tmax))
-	append(out, u32(hitobject_attributes))
+	append(&builder.data, u32(hit_object))
+	append(&builder.data, u32(acceleration_structure))
+	append(&builder.data, u32(instanceid))
+	append(&builder.data, u32(primitiveid))
+	append(&builder.data, u32(geometryindex))
+	append(&builder.data, u32(hit_kind))
+	append(&builder.data, u32(sbt_record_offset))
+	append(&builder.data, u32(sbt_record_stride))
+	append(&builder.data, u32(origin))
+	append(&builder.data, u32(tmin))
+	append(&builder.data, u32(direction))
+	append(&builder.data, u32(tmax))
+	append(&builder.data, u32(hitobject_attributes))
 }
 
-write_OpHitObjectRecordHitWithIndexNV :: proc(out: ^[dynamic]u32, hit_object: Id, acceleration_structure: Id, instanceid: Id, primitiveid: Id, geometryindex: Id, hit_kind: Id, sbt_record_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, hitobject_attributes: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectRecordHitWithIndexNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectRecordHitWithIndexNV :: proc(builder: ^Builder, hit_object: Id, acceleration_structure: Id, instanceid: Id, primitiveid: Id, geometryindex: Id, hit_kind: Id, sbt_record_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, hitobject_attributes: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectRecordHitWithIndexNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(hit_object))
-	append(out, u32(acceleration_structure))
-	append(out, u32(instanceid))
-	append(out, u32(primitiveid))
-	append(out, u32(geometryindex))
-	append(out, u32(hit_kind))
-	append(out, u32(sbt_record_index))
-	append(out, u32(origin))
-	append(out, u32(tmin))
-	append(out, u32(direction))
-	append(out, u32(tmax))
-	append(out, u32(hitobject_attributes))
+	append(&builder.data, u32(hit_object))
+	append(&builder.data, u32(acceleration_structure))
+	append(&builder.data, u32(instanceid))
+	append(&builder.data, u32(primitiveid))
+	append(&builder.data, u32(geometryindex))
+	append(&builder.data, u32(hit_kind))
+	append(&builder.data, u32(sbt_record_index))
+	append(&builder.data, u32(origin))
+	append(&builder.data, u32(tmin))
+	append(&builder.data, u32(direction))
+	append(&builder.data, u32(tmax))
+	append(&builder.data, u32(hitobject_attributes))
 }
 
-write_OpHitObjectRecordMissNV :: proc(out: ^[dynamic]u32, hit_object: Id, sbt_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectRecordMissNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectRecordMissNV :: proc(builder: ^Builder, hit_object: Id, sbt_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectRecordMissNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(hit_object))
-	append(out, u32(sbt_index))
-	append(out, u32(origin))
-	append(out, u32(tmin))
-	append(out, u32(direction))
-	append(out, u32(tmax))
+	append(&builder.data, u32(hit_object))
+	append(&builder.data, u32(sbt_index))
+	append(&builder.data, u32(origin))
+	append(&builder.data, u32(tmin))
+	append(&builder.data, u32(direction))
+	append(&builder.data, u32(tmax))
 }
 
-write_OpHitObjectExecuteShaderNV :: proc(out: ^[dynamic]u32, hit_object: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectExecuteShaderNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectExecuteShaderNV :: proc(builder: ^Builder, hit_object: Id, payload: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectExecuteShaderNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(hit_object))
-	append(out, u32(payload))
+	append(&builder.data, u32(hit_object))
+	append(&builder.data, u32(payload))
 }
 
-write_OpHitObjectGetCurrentTimeNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetCurrentTimeNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetCurrentTimeNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetCurrentTimeNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetAttributesNV :: proc(out: ^[dynamic]u32, hit_object: Id, hit_object_attribute: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetAttributesNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetAttributesNV :: proc(builder: ^Builder, hit_object: Id, hit_object_attribute: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetAttributesNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(hit_object))
-	append(out, u32(hit_object_attribute))
+	append(&builder.data, u32(hit_object))
+	append(&builder.data, u32(hit_object_attribute))
 }
 
-write_OpHitObjectGetHitKindNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetHitKindNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetHitKindNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetHitKindNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetPrimitiveIndexNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetPrimitiveIndexNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetPrimitiveIndexNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetPrimitiveIndexNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetGeometryIndexNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetGeometryIndexNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetGeometryIndexNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetGeometryIndexNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetInstanceIdNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetInstanceIdNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetInstanceIdNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetInstanceIdNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetInstanceCustomIndexNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetInstanceCustomIndexNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetInstanceCustomIndexNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetInstanceCustomIndexNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetWorldRayDirectionNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetWorldRayDirectionNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetWorldRayDirectionNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetWorldRayDirectionNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetWorldRayOriginNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetWorldRayOriginNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetWorldRayOriginNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetWorldRayOriginNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetRayTMaxNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetRayTMaxNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetRayTMaxNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetRayTMaxNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetRayTMinNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetRayTMinNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetRayTMinNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetRayTMinNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectIsEmptyNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectIsEmptyNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectIsEmptyNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectIsEmptyNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectIsHitNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectIsHitNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectIsHitNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectIsHitNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectIsMissNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectIsMissNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectIsMissNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectIsMissNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpReorderThreadWithHitObjectNV :: proc(out: ^[dynamic]u32, hit_object: Id, hint: Maybe(Id) = nil, bits: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.ReorderThreadWithHitObjectNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpReorderThreadWithHitObjectNV :: proc(builder: ^Builder, hit_object: Id, hint: Maybe(Id) = nil, bits: Maybe(Id) = nil) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ReorderThreadWithHitObjectNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(hit_object))
-	if hint, ok := hint.?; ok do append(out, u32(hint))
-	if bits, ok := bits.?; ok do append(out, u32(bits))
+	append(&builder.data, u32(hit_object))
+	if hint, ok := hint.?; ok do append(&builder.data, u32(hint))
+	if bits, ok := bits.?; ok do append(&builder.data, u32(bits))
 }
 
-write_OpReorderThreadWithHintNV :: proc(out: ^[dynamic]u32, hint: Id, bits: Id) {
-	start := len(out)
-	append(out, u32(Op.ReorderThreadWithHintNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpReorderThreadWithHintNV :: proc(builder: ^Builder, hint: Id, bits: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ReorderThreadWithHintNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(hint))
-	append(out, u32(bits))
+	append(&builder.data, u32(hint))
+	append(&builder.data, u32(bits))
 }
 
-write_OpTypeHitObjectNV :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeHitObjectNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeHitObjectNV :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeHitObjectNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpImageSampleFootprintNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sampled_image: Id, coordinate: Id, granularity: Id, coarse: Id, _operand_6: Maybe(ImageOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.ImageSampleFootprintNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpImageSampleFootprintNV :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, granularity: Id, coarse: Id, _operand_6: Maybe(ImageOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ImageSampleFootprintNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sampled_image))
-	append(out, u32(coordinate))
-	append(out, u32(granularity))
-	append(out, u32(coarse))
-	if _operand_6, ok := _operand_6.?; ok do append(out, transmute(u32)_operand_6)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sampled_image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(granularity))
+	append(&builder.data, u32(coarse))
+	if _operand_6, ok := _operand_6.?; ok do append(&builder.data, transmute(u32)_operand_6)
+	return builder.current_id^
 }
 
-write_OpTypeCooperativeVectorNV :: proc(out: ^[dynamic]u32, result: Id, component_type: Id, component_count: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeCooperativeVectorNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeCooperativeVectorNV :: proc(builder: ^Builder, component_type: Id, component_count: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeCooperativeVectorNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(component_type))
-	append(out, u32(component_count))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(component_type))
+	append(&builder.data, u32(component_count))
+	return builder.current_id^
 }
 
-write_OpCooperativeVectorMatrixMulNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, input: Id, inputinterpretation: Id, matrix_: Id, matrixoffset: Id, matrixinterpretation: Id, m: Id, k: Id, memorylayout: Id, transpose: Id, matrixstride: Maybe(Id) = nil, _operand_12: Maybe(CooperativeMatrixOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.CooperativeVectorMatrixMulNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeVectorMatrixMulNV :: proc(builder: ^Builder, result_type: Id, input: Id, inputinterpretation: Id, matrix_: Id, matrixoffset: Id, matrixinterpretation: Id, m: Id, k: Id, memorylayout: Id, transpose: Id, matrixstride: Maybe(Id) = nil, _operand_12: Maybe(CooperativeMatrixOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeVectorMatrixMulNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(input))
-	append(out, u32(inputinterpretation))
-	append(out, u32(matrix_))
-	append(out, u32(matrixoffset))
-	append(out, u32(matrixinterpretation))
-	append(out, u32(m))
-	append(out, u32(k))
-	append(out, u32(memorylayout))
-	append(out, u32(transpose))
-	if matrixstride, ok := matrixstride.?; ok do append(out, u32(matrixstride))
-	if _operand_12, ok := _operand_12.?; ok do append(out, transmute(u32)_operand_12)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(input))
+	append(&builder.data, u32(inputinterpretation))
+	append(&builder.data, u32(matrix_))
+	append(&builder.data, u32(matrixoffset))
+	append(&builder.data, u32(matrixinterpretation))
+	append(&builder.data, u32(m))
+	append(&builder.data, u32(k))
+	append(&builder.data, u32(memorylayout))
+	append(&builder.data, u32(transpose))
+	if matrixstride, ok := matrixstride.?; ok do append(&builder.data, u32(matrixstride))
+	if _operand_12, ok := _operand_12.?; ok do append(&builder.data, transmute(u32)_operand_12)
+	return builder.current_id^
 }
 
-write_OpCooperativeVectorOuterProductAccumulateNV :: proc(out: ^[dynamic]u32, pointer: Id, offset: Id, a: Id, b: Id, memorylayout: Id, matrixinterpretation: Id, matrixstride: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.CooperativeVectorOuterProductAccumulateNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeVectorOuterProductAccumulateNV :: proc(builder: ^Builder, pointer: Id, offset: Id, a: Id, b: Id, memorylayout: Id, matrixinterpretation: Id, matrixstride: Maybe(Id) = nil) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeVectorOuterProductAccumulateNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(pointer))
-	append(out, u32(offset))
-	append(out, u32(a))
-	append(out, u32(b))
-	append(out, u32(memorylayout))
-	append(out, u32(matrixinterpretation))
-	if matrixstride, ok := matrixstride.?; ok do append(out, u32(matrixstride))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(offset))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(memorylayout))
+	append(&builder.data, u32(matrixinterpretation))
+	if matrixstride, ok := matrixstride.?; ok do append(&builder.data, u32(matrixstride))
 }
 
-write_OpCooperativeVectorReduceSumAccumulateNV :: proc(out: ^[dynamic]u32, pointer: Id, offset: Id, v: Id) {
-	start := len(out)
-	append(out, u32(Op.CooperativeVectorReduceSumAccumulateNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeVectorReduceSumAccumulateNV :: proc(builder: ^Builder, pointer: Id, offset: Id, v: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeVectorReduceSumAccumulateNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(pointer))
-	append(out, u32(offset))
-	append(out, u32(v))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(offset))
+	append(&builder.data, u32(v))
 }
 
-write_OpCooperativeVectorMatrixMulAddNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, input: Id, inputinterpretation: Id, matrix_: Id, matrixoffset: Id, matrixinterpretation: Id, bias: Id, biasoffset: Id, biasinterpretation: Id, m: Id, k: Id, memorylayout: Id, transpose: Id, matrixstride: Maybe(Id) = nil, _operand_15: Maybe(CooperativeMatrixOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.CooperativeVectorMatrixMulAddNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeVectorMatrixMulAddNV :: proc(builder: ^Builder, result_type: Id, input: Id, inputinterpretation: Id, matrix_: Id, matrixoffset: Id, matrixinterpretation: Id, bias: Id, biasoffset: Id, biasinterpretation: Id, m: Id, k: Id, memorylayout: Id, transpose: Id, matrixstride: Maybe(Id) = nil, _operand_15: Maybe(CooperativeMatrixOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeVectorMatrixMulAddNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(input))
-	append(out, u32(inputinterpretation))
-	append(out, u32(matrix_))
-	append(out, u32(matrixoffset))
-	append(out, u32(matrixinterpretation))
-	append(out, u32(bias))
-	append(out, u32(biasoffset))
-	append(out, u32(biasinterpretation))
-	append(out, u32(m))
-	append(out, u32(k))
-	append(out, u32(memorylayout))
-	append(out, u32(transpose))
-	if matrixstride, ok := matrixstride.?; ok do append(out, u32(matrixstride))
-	if _operand_15, ok := _operand_15.?; ok do append(out, transmute(u32)_operand_15)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(input))
+	append(&builder.data, u32(inputinterpretation))
+	append(&builder.data, u32(matrix_))
+	append(&builder.data, u32(matrixoffset))
+	append(&builder.data, u32(matrixinterpretation))
+	append(&builder.data, u32(bias))
+	append(&builder.data, u32(biasoffset))
+	append(&builder.data, u32(biasinterpretation))
+	append(&builder.data, u32(m))
+	append(&builder.data, u32(k))
+	append(&builder.data, u32(memorylayout))
+	append(&builder.data, u32(transpose))
+	if matrixstride, ok := matrixstride.?; ok do append(&builder.data, u32(matrixstride))
+	if _operand_15, ok := _operand_15.?; ok do append(&builder.data, transmute(u32)_operand_15)
+	return builder.current_id^
 }
 
-write_OpCooperativeMatrixConvertNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, matrix_: Id) {
-	start := len(out)
-	append(out, u32(Op.CooperativeMatrixConvertNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeMatrixConvertNV :: proc(builder: ^Builder, result_type: Id, matrix_: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeMatrixConvertNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(matrix_))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(matrix_))
+	return builder.current_id^
 }
 
-write_OpEmitMeshTasksEXT :: proc(out: ^[dynamic]u32, group_count_x: Id, group_count_y: Id, group_count_z: Id, payload: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.EmitMeshTasksEXT))
-	defer out[start] |= u32(len(out) - start) << 16
+OpEmitMeshTasksEXT :: proc(builder: ^Builder, group_count_x: Id, group_count_y: Id, group_count_z: Id, payload: Maybe(Id) = nil) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.EmitMeshTasksEXT))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(group_count_x))
-	append(out, u32(group_count_y))
-	append(out, u32(group_count_z))
-	if payload, ok := payload.?; ok do append(out, u32(payload))
+	append(&builder.data, u32(group_count_x))
+	append(&builder.data, u32(group_count_y))
+	append(&builder.data, u32(group_count_z))
+	if payload, ok := payload.?; ok do append(&builder.data, u32(payload))
 }
 
-write_OpSetMeshOutputsEXT :: proc(out: ^[dynamic]u32, vertex_count: Id, primitive_count: Id) {
-	start := len(out)
-	append(out, u32(Op.SetMeshOutputsEXT))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSetMeshOutputsEXT :: proc(builder: ^Builder, vertex_count: Id, primitive_count: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SetMeshOutputsEXT))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(vertex_count))
-	append(out, u32(primitive_count))
+	append(&builder.data, u32(vertex_count))
+	append(&builder.data, u32(primitive_count))
 }
 
-write_OpGroupNonUniformPartitionNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupNonUniformPartitionNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpGroupNonUniformPartitionNV :: proc(builder: ^Builder, result_type: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupNonUniformPartitionNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpWritePackedPrimitiveIndices4x8NV :: proc(out: ^[dynamic]u32, index_offset: Id, packed_indices: Id) {
-	start := len(out)
-	append(out, u32(Op.WritePackedPrimitiveIndices4x8NV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpWritePackedPrimitiveIndices4x8NV :: proc(builder: ^Builder, index_offset: Id, packed_indices: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.WritePackedPrimitiveIndices4x8NV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(index_offset))
-	append(out, u32(packed_indices))
+	append(&builder.data, u32(index_offset))
+	append(&builder.data, u32(packed_indices))
 }
 
-write_OpFetchMicroTriangleVertexPositionNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, accel: Id, instance_id: Id, geometry_index: Id, primitive_index: Id, barycentric: Id) {
-	start := len(out)
-	append(out, u32(Op.FetchMicroTriangleVertexPositionNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFetchMicroTriangleVertexPositionNV :: proc(builder: ^Builder, result_type: Id, accel: Id, instance_id: Id, geometry_index: Id, primitive_index: Id, barycentric: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FetchMicroTriangleVertexPositionNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(accel))
-	append(out, u32(instance_id))
-	append(out, u32(geometry_index))
-	append(out, u32(primitive_index))
-	append(out, u32(barycentric))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(accel))
+	append(&builder.data, u32(instance_id))
+	append(&builder.data, u32(geometry_index))
+	append(&builder.data, u32(primitive_index))
+	append(&builder.data, u32(barycentric))
+	return builder.current_id^
 }
 
-write_OpFetchMicroTriangleVertexBarycentricNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, accel: Id, instance_id: Id, geometry_index: Id, primitive_index: Id, barycentric: Id) {
-	start := len(out)
-	append(out, u32(Op.FetchMicroTriangleVertexBarycentricNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFetchMicroTriangleVertexBarycentricNV :: proc(builder: ^Builder, result_type: Id, accel: Id, instance_id: Id, geometry_index: Id, primitive_index: Id, barycentric: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FetchMicroTriangleVertexBarycentricNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(accel))
-	append(out, u32(instance_id))
-	append(out, u32(geometry_index))
-	append(out, u32(primitive_index))
-	append(out, u32(barycentric))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(accel))
+	append(&builder.data, u32(instance_id))
+	append(&builder.data, u32(geometry_index))
+	append(&builder.data, u32(primitive_index))
+	append(&builder.data, u32(barycentric))
+	return builder.current_id^
 }
 
-write_OpCooperativeVectorLoadNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, offset: Id, _operand_4: Maybe(MemoryAccess) = nil) {
-	start := len(out)
-	append(out, u32(Op.CooperativeVectorLoadNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeVectorLoadNV :: proc(builder: ^Builder, result_type: Id, pointer: Id, offset: Id, _operand_4: Maybe(MemoryAccess) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeVectorLoadNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(offset))
-	if _operand_4, ok := _operand_4.?; ok do append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(offset))
+	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	return builder.current_id^
 }
 
-write_OpCooperativeVectorStoreNV :: proc(out: ^[dynamic]u32, pointer: Id, offset: Id, object: Id, _operand_3: Maybe(MemoryAccess) = nil) {
-	start := len(out)
-	append(out, u32(Op.CooperativeVectorStoreNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeVectorStoreNV :: proc(builder: ^Builder, pointer: Id, offset: Id, object: Id, _operand_3: Maybe(MemoryAccess) = nil) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeVectorStoreNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(pointer))
-	append(out, u32(offset))
-	append(out, u32(object))
-	if _operand_3, ok := _operand_3.?; ok do append(out, transmute(u32)_operand_3)
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(offset))
+	append(&builder.data, u32(object))
+	if _operand_3, ok := _operand_3.?; ok do append(&builder.data, transmute(u32)_operand_3)
 }
 
-write_OpReportIntersectionKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit: Id, hitkind: Id) {
-	start := len(out)
-	append(out, u32(Op.ReportIntersectionKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpReportIntersectionKHR :: proc(builder: ^Builder, result_type: Id, hit: Id, hitkind: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ReportIntersectionKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit))
-	append(out, u32(hitkind))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit))
+	append(&builder.data, u32(hitkind))
+	return builder.current_id^
 }
 
-write_OpIgnoreIntersectionNV :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.IgnoreIntersectionNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIgnoreIntersectionNV :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IgnoreIntersectionNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpTerminateRayNV :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.TerminateRayNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTerminateRayNV :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TerminateRayNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpTraceNV :: proc(out: ^[dynamic]u32, accel: Id, ray_flags: Id, cull_mask: Id, sbt_offset: Id, sbt_stride: Id, miss_index: Id, ray_origin: Id, ray_tmin: Id, ray_direction: Id, ray_tmax: Id, payloadid: Id) {
-	start := len(out)
-	append(out, u32(Op.TraceNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTraceNV :: proc(builder: ^Builder, accel: Id, ray_flags: Id, cull_mask: Id, sbt_offset: Id, sbt_stride: Id, miss_index: Id, ray_origin: Id, ray_tmin: Id, ray_direction: Id, ray_tmax: Id, payloadid: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TraceNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(accel))
-	append(out, u32(ray_flags))
-	append(out, u32(cull_mask))
-	append(out, u32(sbt_offset))
-	append(out, u32(sbt_stride))
-	append(out, u32(miss_index))
-	append(out, u32(ray_origin))
-	append(out, u32(ray_tmin))
-	append(out, u32(ray_direction))
-	append(out, u32(ray_tmax))
-	append(out, u32(payloadid))
+	append(&builder.data, u32(accel))
+	append(&builder.data, u32(ray_flags))
+	append(&builder.data, u32(cull_mask))
+	append(&builder.data, u32(sbt_offset))
+	append(&builder.data, u32(sbt_stride))
+	append(&builder.data, u32(miss_index))
+	append(&builder.data, u32(ray_origin))
+	append(&builder.data, u32(ray_tmin))
+	append(&builder.data, u32(ray_direction))
+	append(&builder.data, u32(ray_tmax))
+	append(&builder.data, u32(payloadid))
 }
 
-write_OpTraceMotionNV :: proc(out: ^[dynamic]u32, accel: Id, ray_flags: Id, cull_mask: Id, sbt_offset: Id, sbt_stride: Id, miss_index: Id, ray_origin: Id, ray_tmin: Id, ray_direction: Id, ray_tmax: Id, time: Id, payloadid: Id) {
-	start := len(out)
-	append(out, u32(Op.TraceMotionNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTraceMotionNV :: proc(builder: ^Builder, accel: Id, ray_flags: Id, cull_mask: Id, sbt_offset: Id, sbt_stride: Id, miss_index: Id, ray_origin: Id, ray_tmin: Id, ray_direction: Id, ray_tmax: Id, time: Id, payloadid: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TraceMotionNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(accel))
-	append(out, u32(ray_flags))
-	append(out, u32(cull_mask))
-	append(out, u32(sbt_offset))
-	append(out, u32(sbt_stride))
-	append(out, u32(miss_index))
-	append(out, u32(ray_origin))
-	append(out, u32(ray_tmin))
-	append(out, u32(ray_direction))
-	append(out, u32(ray_tmax))
-	append(out, u32(time))
-	append(out, u32(payloadid))
+	append(&builder.data, u32(accel))
+	append(&builder.data, u32(ray_flags))
+	append(&builder.data, u32(cull_mask))
+	append(&builder.data, u32(sbt_offset))
+	append(&builder.data, u32(sbt_stride))
+	append(&builder.data, u32(miss_index))
+	append(&builder.data, u32(ray_origin))
+	append(&builder.data, u32(ray_tmin))
+	append(&builder.data, u32(ray_direction))
+	append(&builder.data, u32(ray_tmax))
+	append(&builder.data, u32(time))
+	append(&builder.data, u32(payloadid))
 }
 
-write_OpTraceRayMotionNV :: proc(out: ^[dynamic]u32, accel: Id, ray_flags: Id, cull_mask: Id, sbt_offset: Id, sbt_stride: Id, miss_index: Id, ray_origin: Id, ray_tmin: Id, ray_direction: Id, ray_tmax: Id, time: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.TraceRayMotionNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTraceRayMotionNV :: proc(builder: ^Builder, accel: Id, ray_flags: Id, cull_mask: Id, sbt_offset: Id, sbt_stride: Id, miss_index: Id, ray_origin: Id, ray_tmin: Id, ray_direction: Id, ray_tmax: Id, time: Id, payload: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TraceRayMotionNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(accel))
-	append(out, u32(ray_flags))
-	append(out, u32(cull_mask))
-	append(out, u32(sbt_offset))
-	append(out, u32(sbt_stride))
-	append(out, u32(miss_index))
-	append(out, u32(ray_origin))
-	append(out, u32(ray_tmin))
-	append(out, u32(ray_direction))
-	append(out, u32(ray_tmax))
-	append(out, u32(time))
-	append(out, u32(payload))
+	append(&builder.data, u32(accel))
+	append(&builder.data, u32(ray_flags))
+	append(&builder.data, u32(cull_mask))
+	append(&builder.data, u32(sbt_offset))
+	append(&builder.data, u32(sbt_stride))
+	append(&builder.data, u32(miss_index))
+	append(&builder.data, u32(ray_origin))
+	append(&builder.data, u32(ray_tmin))
+	append(&builder.data, u32(ray_direction))
+	append(&builder.data, u32(ray_tmax))
+	append(&builder.data, u32(time))
+	append(&builder.data, u32(payload))
 }
 
-write_OpRayQueryGetIntersectionTriangleVertexPositionsKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionTriangleVertexPositionsKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRayQueryGetIntersectionTriangleVertexPositionsKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionTriangleVertexPositionsKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
 }
 
-write_OpTypeAccelerationStructureKHR :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeAccelerationStructureKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeAccelerationStructureKHR :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeAccelerationStructureKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpExecuteCallableNV :: proc(out: ^[dynamic]u32, sbt_index: Id, callable_dataid: Id) {
-	start := len(out)
-	append(out, u32(Op.ExecuteCallableNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpExecuteCallableNV :: proc(builder: ^Builder, sbt_index: Id, callable_dataid: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ExecuteCallableNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(sbt_index))
-	append(out, u32(callable_dataid))
+	append(&builder.data, u32(sbt_index))
+	append(&builder.data, u32(callable_dataid))
 }
 
-write_OpRayQueryGetIntersectionClusterIdNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionClusterIdNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRayQueryGetIntersectionClusterIdNV :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionClusterIdNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetClusterIdNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetClusterIdNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetClusterIdNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetClusterIdNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpTypeCooperativeMatrixNV :: proc(out: ^[dynamic]u32, result: Id, component_type: Id, execution: Id, rows: Id, columns: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeCooperativeMatrixNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeCooperativeMatrixNV :: proc(builder: ^Builder, component_type: Id, execution: Id, rows: Id, columns: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeCooperativeMatrixNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(component_type))
-	append(out, u32(execution))
-	append(out, u32(rows))
-	append(out, u32(columns))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(component_type))
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(rows))
+	append(&builder.data, u32(columns))
+	return builder.current_id^
 }
 
-write_OpCooperativeMatrixLoadNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, stride: Id, column_major: Id, _operand_5: Maybe(MemoryAccess) = nil) {
-	start := len(out)
-	append(out, u32(Op.CooperativeMatrixLoadNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeMatrixLoadNV :: proc(builder: ^Builder, result_type: Id, pointer: Id, stride: Id, column_major: Id, _operand_5: Maybe(MemoryAccess) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeMatrixLoadNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(stride))
-	append(out, u32(column_major))
-	if _operand_5, ok := _operand_5.?; ok do append(out, transmute(u32)_operand_5)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(stride))
+	append(&builder.data, u32(column_major))
+	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	return builder.current_id^
 }
 
-write_OpCooperativeMatrixStoreNV :: proc(out: ^[dynamic]u32, pointer: Id, object: Id, stride: Id, column_major: Id, _operand_4: Maybe(MemoryAccess) = nil) {
-	start := len(out)
-	append(out, u32(Op.CooperativeMatrixStoreNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeMatrixStoreNV :: proc(builder: ^Builder, pointer: Id, object: Id, stride: Id, column_major: Id, _operand_4: Maybe(MemoryAccess) = nil) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeMatrixStoreNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(pointer))
-	append(out, u32(object))
-	append(out, u32(stride))
-	append(out, u32(column_major))
-	if _operand_4, ok := _operand_4.?; ok do append(out, transmute(u32)_operand_4)
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(object))
+	append(&builder.data, u32(stride))
+	append(&builder.data, u32(column_major))
+	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
 }
 
-write_OpCooperativeMatrixMulAddNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, b: Id, c: Id) {
-	start := len(out)
-	append(out, u32(Op.CooperativeMatrixMulAddNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeMatrixMulAddNV :: proc(builder: ^Builder, result_type: Id, a: Id, b: Id, c: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeMatrixMulAddNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(b))
-	append(out, u32(c))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(c))
+	return builder.current_id^
 }
 
-write_OpCooperativeMatrixLengthNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, type: Id) {
-	start := len(out)
-	append(out, u32(Op.CooperativeMatrixLengthNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeMatrixLengthNV :: proc(builder: ^Builder, result_type: Id, type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeMatrixLengthNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(type))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(type))
+	return builder.current_id^
 }
 
-write_OpBeginInvocationInterlockEXT :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.BeginInvocationInterlockEXT))
-	defer out[start] |= u32(len(out) - start) << 16
+OpBeginInvocationInterlockEXT :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.BeginInvocationInterlockEXT))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpEndInvocationInterlockEXT :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.EndInvocationInterlockEXT))
-	defer out[start] |= u32(len(out) - start) << 16
+OpEndInvocationInterlockEXT :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.EndInvocationInterlockEXT))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpCooperativeMatrixReduceNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, matrix_: Id, reduce: CooperativeMatrixReduce, combinefunc: Id) {
-	start := len(out)
-	append(out, u32(Op.CooperativeMatrixReduceNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeMatrixReduceNV :: proc(builder: ^Builder, result_type: Id, matrix_: Id, reduce: CooperativeMatrixReduce, combinefunc: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeMatrixReduceNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(matrix_))
-	append(out, transmute(u32)reduce)
-	append(out, u32(combinefunc))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(matrix_))
+	append(&builder.data, transmute(u32)reduce)
+	append(&builder.data, u32(combinefunc))
+	return builder.current_id^
 }
 
-write_OpCooperativeMatrixLoadTensorNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, object: Id, tensorlayout: Id, memory_operand: MemoryAccess, tensor_addressing_operands: TensorAddressingOperands) {
-	start := len(out)
-	append(out, u32(Op.CooperativeMatrixLoadTensorNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeMatrixLoadTensorNV :: proc(builder: ^Builder, result_type: Id, pointer: Id, object: Id, tensorlayout: Id, memory_operand: MemoryAccess, tensor_addressing_operands: TensorAddressingOperands) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeMatrixLoadTensorNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(object))
-	append(out, u32(tensorlayout))
-	append(out, transmute(u32)memory_operand)
-	append(out, transmute(u32)tensor_addressing_operands)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(object))
+	append(&builder.data, u32(tensorlayout))
+	append(&builder.data, transmute(u32)memory_operand)
+	append(&builder.data, transmute(u32)tensor_addressing_operands)
+	return builder.current_id^
 }
 
-write_OpCooperativeMatrixStoreTensorNV :: proc(out: ^[dynamic]u32, pointer: Id, object: Id, tensorlayout: Id, memory_operand: MemoryAccess, tensor_addressing_operands: TensorAddressingOperands) {
-	start := len(out)
-	append(out, u32(Op.CooperativeMatrixStoreTensorNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeMatrixStoreTensorNV :: proc(builder: ^Builder, pointer: Id, object: Id, tensorlayout: Id, memory_operand: MemoryAccess, tensor_addressing_operands: TensorAddressingOperands) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeMatrixStoreTensorNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(pointer))
-	append(out, u32(object))
-	append(out, u32(tensorlayout))
-	append(out, transmute(u32)memory_operand)
-	append(out, transmute(u32)tensor_addressing_operands)
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(object))
+	append(&builder.data, u32(tensorlayout))
+	append(&builder.data, transmute(u32)memory_operand)
+	append(&builder.data, transmute(u32)tensor_addressing_operands)
 }
 
-write_OpCooperativeMatrixPerElementOpNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, matrix_: Id, func: Id, operands: ..Id) {
-	start := len(out)
-	append(out, u32(Op.CooperativeMatrixPerElementOpNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeMatrixPerElementOpNV :: proc(builder: ^Builder, result_type: Id, matrix_: Id, func: Id, operands: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeMatrixPerElementOpNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(matrix_))
-	append(out, u32(func))
-	for operands in operands do append(out, u32(operands))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(matrix_))
+	append(&builder.data, u32(func))
+	for operands in operands do append(&builder.data, u32(operands))
+	return builder.current_id^
 }
 
-write_OpTypeTensorLayoutNV :: proc(out: ^[dynamic]u32, result: Id, dim: Id, clampmode: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeTensorLayoutNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeTensorLayoutNV :: proc(builder: ^Builder, dim: Id, clampmode: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeTensorLayoutNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(dim))
-	append(out, u32(clampmode))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(dim))
+	append(&builder.data, u32(clampmode))
+	return builder.current_id^
 }
 
-write_OpTypeTensorViewNV :: proc(out: ^[dynamic]u32, result: Id, dim: Id, hasdimensions: Id, p: ..Id) {
-	start := len(out)
-	append(out, u32(Op.TypeTensorViewNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeTensorViewNV :: proc(builder: ^Builder, dim: Id, hasdimensions: Id, p: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeTensorViewNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(dim))
-	append(out, u32(hasdimensions))
-	for p in p do append(out, u32(p))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(dim))
+	append(&builder.data, u32(hasdimensions))
+	for p in p do append(&builder.data, u32(p))
+	return builder.current_id^
 }
 
-write_OpCreateTensorLayoutNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.CreateTensorLayoutNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCreateTensorLayoutNV :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CreateTensorLayoutNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTensorLayoutSetDimensionNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, tensorlayout: Id, dim: ..Id) {
-	start := len(out)
-	append(out, u32(Op.TensorLayoutSetDimensionNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTensorLayoutSetDimensionNV :: proc(builder: ^Builder, result_type: Id, tensorlayout: Id, dim: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TensorLayoutSetDimensionNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(tensorlayout))
-	for dim in dim do append(out, u32(dim))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(tensorlayout))
+	for dim in dim do append(&builder.data, u32(dim))
+	return builder.current_id^
 }
 
-write_OpTensorLayoutSetStrideNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, tensorlayout: Id, stride: ..Id) {
-	start := len(out)
-	append(out, u32(Op.TensorLayoutSetStrideNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTensorLayoutSetStrideNV :: proc(builder: ^Builder, result_type: Id, tensorlayout: Id, stride: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TensorLayoutSetStrideNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(tensorlayout))
-	for stride in stride do append(out, u32(stride))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(tensorlayout))
+	for stride in stride do append(&builder.data, u32(stride))
+	return builder.current_id^
 }
 
-write_OpTensorLayoutSliceNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, tensorlayout: Id, operands: ..Id) {
-	start := len(out)
-	append(out, u32(Op.TensorLayoutSliceNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTensorLayoutSliceNV :: proc(builder: ^Builder, result_type: Id, tensorlayout: Id, operands: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TensorLayoutSliceNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(tensorlayout))
-	for operands in operands do append(out, u32(operands))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(tensorlayout))
+	for operands in operands do append(&builder.data, u32(operands))
+	return builder.current_id^
 }
 
-write_OpTensorLayoutSetClampValueNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, tensorlayout: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.TensorLayoutSetClampValueNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTensorLayoutSetClampValueNV :: proc(builder: ^Builder, result_type: Id, tensorlayout: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TensorLayoutSetClampValueNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(tensorlayout))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(tensorlayout))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpCreateTensorViewNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.CreateTensorViewNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCreateTensorViewNV :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CreateTensorViewNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTensorViewSetDimensionNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, tensorview: Id, dim: ..Id) {
-	start := len(out)
-	append(out, u32(Op.TensorViewSetDimensionNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTensorViewSetDimensionNV :: proc(builder: ^Builder, result_type: Id, tensorview: Id, dim: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TensorViewSetDimensionNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(tensorview))
-	for dim in dim do append(out, u32(dim))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(tensorview))
+	for dim in dim do append(&builder.data, u32(dim))
+	return builder.current_id^
 }
 
-write_OpTensorViewSetStrideNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, tensorview: Id, stride: ..Id) {
-	start := len(out)
-	append(out, u32(Op.TensorViewSetStrideNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTensorViewSetStrideNV :: proc(builder: ^Builder, result_type: Id, tensorview: Id, stride: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TensorViewSetStrideNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(tensorview))
-	for stride in stride do append(out, u32(stride))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(tensorview))
+	for stride in stride do append(&builder.data, u32(stride))
+	return builder.current_id^
 }
 
-write_OpDemoteToHelperInvocation :: proc(out: ^[dynamic]u32) {
-	start := len(out)
-	append(out, u32(Op.DemoteToHelperInvocation))
-	defer out[start] |= u32(len(out) - start) << 16
+OpDemoteToHelperInvocation :: proc(builder: ^Builder) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.DemoteToHelperInvocation))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 }
 
-write_OpIsHelperInvocationEXT :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.IsHelperInvocationEXT))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIsHelperInvocationEXT :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IsHelperInvocationEXT))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTensorViewSetClipNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, tensorview: Id, cliprowoffset: Id, cliprowspan: Id, clipcoloffset: Id, clipcolspan: Id) {
-	start := len(out)
-	append(out, u32(Op.TensorViewSetClipNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTensorViewSetClipNV :: proc(builder: ^Builder, result_type: Id, tensorview: Id, cliprowoffset: Id, cliprowspan: Id, clipcoloffset: Id, clipcolspan: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TensorViewSetClipNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(tensorview))
-	append(out, u32(cliprowoffset))
-	append(out, u32(cliprowspan))
-	append(out, u32(clipcoloffset))
-	append(out, u32(clipcolspan))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(tensorview))
+	append(&builder.data, u32(cliprowoffset))
+	append(&builder.data, u32(cliprowspan))
+	append(&builder.data, u32(clipcoloffset))
+	append(&builder.data, u32(clipcolspan))
+	return builder.current_id^
 }
 
-write_OpTensorLayoutSetBlockSizeNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, tensorlayout: Id, blocksize: ..Id) {
-	start := len(out)
-	append(out, u32(Op.TensorLayoutSetBlockSizeNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTensorLayoutSetBlockSizeNV :: proc(builder: ^Builder, result_type: Id, tensorlayout: Id, blocksize: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TensorLayoutSetBlockSizeNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(tensorlayout))
-	for blocksize in blocksize do append(out, u32(blocksize))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(tensorlayout))
+	for blocksize in blocksize do append(&builder.data, u32(blocksize))
+	return builder.current_id^
 }
 
-write_OpCooperativeMatrixTransposeNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, matrix_: Id) {
-	start := len(out)
-	append(out, u32(Op.CooperativeMatrixTransposeNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpCooperativeMatrixTransposeNV :: proc(builder: ^Builder, result_type: Id, matrix_: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CooperativeMatrixTransposeNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(matrix_))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(matrix_))
+	return builder.current_id^
 }
 
-write_OpConvertUToImageNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertUToImageNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConvertUToImageNV :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertUToImageNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
-write_OpConvertUToSamplerNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertUToSamplerNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConvertUToSamplerNV :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertUToSamplerNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
-write_OpConvertImageToUNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertImageToUNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConvertImageToUNV :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertImageToUNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
-write_OpConvertSamplerToUNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertSamplerToUNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConvertSamplerToUNV :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertSamplerToUNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
-write_OpConvertUToSampledImageNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertUToSampledImageNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConvertUToSampledImageNV :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertUToSampledImageNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
-write_OpConvertSampledImageToUNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertSampledImageToUNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConvertSampledImageToUNV :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertSampledImageToUNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
-write_OpSamplerImageAddressingModeNV :: proc(out: ^[dynamic]u32, bit_width: u32) {
-	start := len(out)
-	append(out, u32(Op.SamplerImageAddressingModeNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSamplerImageAddressingModeNV :: proc(builder: ^Builder, bit_width: u32) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SamplerImageAddressingModeNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(bit_width))
+	append(&builder.data, u32(bit_width))
 }
 
-write_OpRawAccessChainNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, base: Id, byte_stride: Id, element_index: Id, byte_offset: Id, _operand_6: Maybe(RawAccessChainOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.RawAccessChainNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRawAccessChainNV :: proc(builder: ^Builder, result_type: Id, base: Id, byte_stride: Id, element_index: Id, byte_offset: Id, _operand_6: Maybe(RawAccessChainOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RawAccessChainNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(base))
-	append(out, u32(byte_stride))
-	append(out, u32(element_index))
-	append(out, u32(byte_offset))
-	if _operand_6, ok := _operand_6.?; ok do append(out, transmute(u32)_operand_6)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(base))
+	append(&builder.data, u32(byte_stride))
+	append(&builder.data, u32(element_index))
+	append(&builder.data, u32(byte_offset))
+	if _operand_6, ok := _operand_6.?; ok do append(&builder.data, transmute(u32)_operand_6)
+	return builder.current_id^
 }
 
-write_OpRayQueryGetIntersectionSpherePositionNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionSpherePositionNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRayQueryGetIntersectionSpherePositionNV :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionSpherePositionNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
 }
 
-write_OpRayQueryGetIntersectionSphereRadiusNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionSphereRadiusNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRayQueryGetIntersectionSphereRadiusNV :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionSphereRadiusNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
 }
 
-write_OpRayQueryGetIntersectionLSSPositionsNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionLSSPositionsNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRayQueryGetIntersectionLSSPositionsNV :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionLSSPositionsNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
 }
 
-write_OpRayQueryGetIntersectionLSSRadiiNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionLSSRadiiNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRayQueryGetIntersectionLSSRadiiNV :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionLSSRadiiNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
 }
 
-write_OpRayQueryGetIntersectionLSSHitValueNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionLSSHitValueNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRayQueryGetIntersectionLSSHitValueNV :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionLSSHitValueNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetSpherePositionNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetSpherePositionNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetSpherePositionNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetSpherePositionNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetSphereRadiusNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetSphereRadiusNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetSphereRadiusNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetSphereRadiusNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetLSSPositionsNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetLSSPositionsNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetLSSPositionsNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetLSSPositionsNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectGetLSSRadiiNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectGetLSSRadiiNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectGetLSSRadiiNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectGetLSSRadiiNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectIsSphereHitNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectIsSphereHitNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectIsSphereHitNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectIsSphereHitNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpHitObjectIsLSSHitNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, hit_object: Id) {
-	start := len(out)
-	append(out, u32(Op.HitObjectIsLSSHitNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpHitObjectIsLSSHitNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.HitObjectIsLSSHitNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(hit_object))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(hit_object))
+	return builder.current_id^
 }
 
-write_OpRayQueryIsSphereHitNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryIsSphereHitNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRayQueryIsSphereHitNV :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryIsSphereHitNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
 }
 
-write_OpRayQueryIsLSSHitNV :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryIsLSSHitNV))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRayQueryIsLSSHitNV :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryIsLSSHitNV))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
 }
 
-write_OpSubgroupShuffleINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, data: Id, invocationid: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupShuffleINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupShuffleINTEL :: proc(builder: ^Builder, result_type: Id, data: Id, invocationid: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupShuffleINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(data))
-	append(out, u32(invocationid))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(data))
+	append(&builder.data, u32(invocationid))
+	return builder.current_id^
 }
 
-write_OpSubgroupShuffleDownINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, current: Id, next: Id, delta: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupShuffleDownINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupShuffleDownINTEL :: proc(builder: ^Builder, result_type: Id, current: Id, next: Id, delta: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupShuffleDownINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(current))
-	append(out, u32(next))
-	append(out, u32(delta))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(current))
+	append(&builder.data, u32(next))
+	append(&builder.data, u32(delta))
+	return builder.current_id^
 }
 
-write_OpSubgroupShuffleUpINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, previous: Id, current: Id, delta: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupShuffleUpINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupShuffleUpINTEL :: proc(builder: ^Builder, result_type: Id, previous: Id, current: Id, delta: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupShuffleUpINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(previous))
-	append(out, u32(current))
-	append(out, u32(delta))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(previous))
+	append(&builder.data, u32(current))
+	append(&builder.data, u32(delta))
+	return builder.current_id^
 }
 
-write_OpSubgroupShuffleXorINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, data: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupShuffleXorINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupShuffleXorINTEL :: proc(builder: ^Builder, result_type: Id, data: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupShuffleXorINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(data))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(data))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpSubgroupBlockReadINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, ptr: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupBlockReadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupBlockReadINTEL :: proc(builder: ^Builder, result_type: Id, ptr: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupBlockReadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(ptr))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(ptr))
+	return builder.current_id^
 }
 
-write_OpSubgroupBlockWriteINTEL :: proc(out: ^[dynamic]u32, ptr: Id, data: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupBlockWriteINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupBlockWriteINTEL :: proc(builder: ^Builder, ptr: Id, data: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupBlockWriteINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(ptr))
-	append(out, u32(data))
+	append(&builder.data, u32(ptr))
+	append(&builder.data, u32(data))
 }
 
-write_OpSubgroupImageBlockReadINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id, coordinate: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupImageBlockReadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupImageBlockReadINTEL :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupImageBlockReadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
-	append(out, u32(coordinate))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	append(&builder.data, u32(coordinate))
+	return builder.current_id^
 }
 
-write_OpSubgroupImageBlockWriteINTEL :: proc(out: ^[dynamic]u32, image: Id, coordinate: Id, data: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupImageBlockWriteINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupImageBlockWriteINTEL :: proc(builder: ^Builder, image: Id, coordinate: Id, data: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupImageBlockWriteINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(image))
-	append(out, u32(coordinate))
-	append(out, u32(data))
+	append(&builder.data, u32(image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(data))
 }
 
-write_OpSubgroupImageMediaBlockReadINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image: Id, coordinate: Id, width: Id, height: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupImageMediaBlockReadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupImageMediaBlockReadINTEL :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, width: Id, height: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupImageMediaBlockReadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image))
-	append(out, u32(coordinate))
-	append(out, u32(width))
-	append(out, u32(height))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(width))
+	append(&builder.data, u32(height))
+	return builder.current_id^
 }
 
-write_OpSubgroupImageMediaBlockWriteINTEL :: proc(out: ^[dynamic]u32, image: Id, coordinate: Id, width: Id, height: Id, data: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupImageMediaBlockWriteINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupImageMediaBlockWriteINTEL :: proc(builder: ^Builder, image: Id, coordinate: Id, width: Id, height: Id, data: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupImageMediaBlockWriteINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(image))
-	append(out, u32(coordinate))
-	append(out, u32(width))
-	append(out, u32(height))
-	append(out, u32(data))
+	append(&builder.data, u32(image))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(width))
+	append(&builder.data, u32(height))
+	append(&builder.data, u32(data))
 }
 
-write_OpUCountLeadingZerosINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.UCountLeadingZerosINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUCountLeadingZerosINTEL :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UCountLeadingZerosINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
-write_OpUCountTrailingZerosINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.UCountTrailingZerosINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUCountTrailingZerosINTEL :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UCountTrailingZerosINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
-write_OpAbsISubINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.AbsISubINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAbsISubINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AbsISubINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpAbsUSubINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.AbsUSubINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAbsUSubINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AbsUSubINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpIAddSatINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.IAddSatINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIAddSatINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IAddSatINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpUAddSatINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.UAddSatINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUAddSatINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UAddSatINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpIAverageINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.IAverageINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIAverageINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IAverageINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpUAverageINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.UAverageINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUAverageINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UAverageINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpIAverageRoundedINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.IAverageRoundedINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIAverageRoundedINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IAverageRoundedINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpUAverageRoundedINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.UAverageRoundedINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUAverageRoundedINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UAverageRoundedINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpISubSatINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.ISubSatINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpISubSatINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ISubSatINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpUSubSatINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.USubSatINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUSubSatINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.USubSatINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpIMul32x16INTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.IMul32x16INTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpIMul32x16INTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.IMul32x16INTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpUMul32x16INTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: Id, operand_2: Id) {
-	start := len(out)
-	append(out, u32(Op.UMul32x16INTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpUMul32x16INTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UMul32x16INTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand_1))
-	append(out, u32(operand_2))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand_1))
+	append(&builder.data, u32(operand_2))
+	return builder.current_id^
 }
 
-write_OpConstantFunctionPointerINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, function: Id) {
-	start := len(out)
-	append(out, u32(Op.ConstantFunctionPointerINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpConstantFunctionPointerINTEL :: proc(builder: ^Builder, result_type: Id, function: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConstantFunctionPointerINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(function))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(function))
+	return builder.current_id^
 }
 
-write_OpFunctionPointerCallINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand_1: ..Id) {
-	start := len(out)
-	append(out, u32(Op.FunctionPointerCallINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpFunctionPointerCallINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FunctionPointerCallINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	for operand_1 in operand_1 do append(out, u32(operand_1))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	for operand_1 in operand_1 do append(&builder.data, u32(operand_1))
+	return builder.current_id^
 }
 
-write_OpAsmTargetINTEL :: proc(out: ^[dynamic]u32, result: Id, asm_target: string) {
-	start := len(out)
-	append(out, u32(Op.AsmTargetINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAsmTargetINTEL :: proc(builder: ^Builder, asm_target: string) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AsmTargetINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	write_string(out, asm_target)
+	append(&builder.data, next_id(builder))
+	write_string(&builder.data, asm_target)
+	return builder.current_id^
 }
 
-write_OpAsmINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, asm_type: Id, target: Id, asm_instructions: string, constraints: string) {
-	start := len(out)
-	append(out, u32(Op.AsmINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAsmINTEL :: proc(builder: ^Builder, result_type: Id, asm_type: Id, target: Id, asm_instructions: string, constraints: string) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AsmINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(asm_type))
-	append(out, u32(target))
-	write_string(out, asm_instructions)
-	write_string(out, constraints)
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(asm_type))
+	append(&builder.data, u32(target))
+	write_string(&builder.data, asm_instructions)
+	write_string(&builder.data, constraints)
+	return builder.current_id^
 }
 
-write_OpAsmCallINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, asm_: Id, argument: ..Id) {
-	start := len(out)
-	append(out, u32(Op.AsmCallINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAsmCallINTEL :: proc(builder: ^Builder, result_type: Id, asm_: Id, argument: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AsmCallINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(asm_))
-	for argument in argument do append(out, u32(argument))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(asm_))
+	for argument in argument do append(&builder.data, u32(argument))
+	return builder.current_id^
 }
 
-write_OpAtomicFMinEXT :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicFMinEXT))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicFMinEXT :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicFMinEXT))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpAtomicFMaxEXT :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicFMaxEXT))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAtomicFMaxEXT :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicFMaxEXT))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-	append(out, u32(value))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	append(&builder.data, u32(value))
+	return builder.current_id^
 }
 
-write_OpAssumeTrueKHR :: proc(out: ^[dynamic]u32, condition: Id) {
-	start := len(out)
-	append(out, u32(Op.AssumeTrueKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpAssumeTrueKHR :: proc(builder: ^Builder, condition: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AssumeTrueKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(condition))
+	append(&builder.data, u32(condition))
 }
 
-write_OpExpectKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, value: Id, expectedvalue: Id) {
-	start := len(out)
-	append(out, u32(Op.ExpectKHR))
-	defer out[start] |= u32(len(out) - start) << 16
+OpExpectKHR :: proc(builder: ^Builder, result_type: Id, value: Id, expectedvalue: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ExpectKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(value))
-	append(out, u32(expectedvalue))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(value))
+	append(&builder.data, u32(expectedvalue))
+	return builder.current_id^
 }
 
-write_OpDecorateString :: proc(out: ^[dynamic]u32, target: Id, _operand_1: Decoration) {
-	start := len(out)
-	append(out, u32(Op.DecorateString))
-	defer out[start] |= u32(len(out) - start) << 16
+OpDecorateString :: proc(builder: ^Builder, target: Id, _operand_1: Decoration) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.DecorateString))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(target))
-	append(out, transmute(u32)_operand_1)
+	append(&builder.data, u32(target))
+	append(&builder.data, transmute(u32)_operand_1)
 }
 
-write_OpMemberDecorateString :: proc(out: ^[dynamic]u32, struct_type: Id, member: u32, _operand_2: Decoration) {
-	start := len(out)
-	append(out, u32(Op.MemberDecorateString))
-	defer out[start] |= u32(len(out) - start) << 16
+OpMemberDecorateString :: proc(builder: ^Builder, struct_type: Id, member: u32, _operand_2: Decoration) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.MemberDecorateString))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(struct_type))
-	append(out, u32(member))
-	append(out, transmute(u32)_operand_2)
+	append(&builder.data, u32(struct_type))
+	append(&builder.data, u32(member))
+	append(&builder.data, transmute(u32)_operand_2)
 }
 
-write_OpVmeImageINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image_type: Id, sampler: Id) {
-	start := len(out)
-	append(out, u32(Op.VmeImageINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpVmeImageINTEL :: proc(builder: ^Builder, result_type: Id, image_type: Id, sampler: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.VmeImageINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image_type))
-	append(out, u32(sampler))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image_type))
+	append(&builder.data, u32(sampler))
+	return builder.current_id^
 }
 
-write_OpTypeVmeImageINTEL :: proc(out: ^[dynamic]u32, result: Id, image_type: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeVmeImageINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeVmeImageINTEL :: proc(builder: ^Builder, image_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeVmeImageINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
-	append(out, u32(image_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image_type))
+	return builder.current_id^
 }
 
-write_OpTypeAvcImePayloadINTEL :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeAvcImePayloadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeAvcImePayloadINTEL :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeAvcImePayloadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeAvcRefPayloadINTEL :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeAvcRefPayloadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeAvcRefPayloadINTEL :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeAvcRefPayloadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeAvcSicPayloadINTEL :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeAvcSicPayloadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeAvcSicPayloadINTEL :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeAvcSicPayloadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeAvcMcePayloadINTEL :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeAvcMcePayloadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeAvcMcePayloadINTEL :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeAvcMcePayloadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeAvcMceResultINTEL :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeAvcMceResultINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeAvcMceResultINTEL :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeAvcMceResultINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeAvcImeResultINTEL :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeAvcImeResultINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeAvcImeResultINTEL :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeAvcImeResultINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeAvcImeResultSingleReferenceStreamoutINTEL :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeAvcImeResultSingleReferenceStreamoutINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeAvcImeResultSingleReferenceStreamoutINTEL :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeAvcImeResultSingleReferenceStreamoutINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeAvcImeResultDualReferenceStreamoutINTEL :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeAvcImeResultDualReferenceStreamoutINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeAvcImeResultDualReferenceStreamoutINTEL :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeAvcImeResultDualReferenceStreamoutINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeAvcImeSingleReferenceStreaminINTEL :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeAvcImeSingleReferenceStreaminINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeAvcImeSingleReferenceStreaminINTEL :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeAvcImeSingleReferenceStreaminINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeAvcImeDualReferenceStreaminINTEL :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeAvcImeDualReferenceStreaminINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeAvcImeDualReferenceStreaminINTEL :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeAvcImeDualReferenceStreaminINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeAvcRefResultINTEL :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeAvcRefResultINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeAvcRefResultINTEL :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeAvcRefResultINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpTypeAvcSicResultINTEL :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeAvcSicResultINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpTypeAvcSicResultINTEL :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeAvcSicResultINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetDefaultInterBaseMultiReferencePenaltyINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, slice_type: Id, qp: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetDefaultInterBaseMultiReferencePenaltyINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetDefaultInterBaseMultiReferencePenaltyINTEL :: proc(builder: ^Builder, result_type: Id, slice_type: Id, qp: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetDefaultInterBaseMultiReferencePenaltyINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(slice_type))
-	append(out, u32(qp))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(slice_type))
+	append(&builder.data, u32(qp))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceSetInterBaseMultiReferencePenaltyINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, reference_base_penalty: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceSetInterBaseMultiReferencePenaltyINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceSetInterBaseMultiReferencePenaltyINTEL :: proc(builder: ^Builder, result_type: Id, reference_base_penalty: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceSetInterBaseMultiReferencePenaltyINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(reference_base_penalty))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(reference_base_penalty))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetDefaultInterShapePenaltyINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, slice_type: Id, qp: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetDefaultInterShapePenaltyINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetDefaultInterShapePenaltyINTEL :: proc(builder: ^Builder, result_type: Id, slice_type: Id, qp: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetDefaultInterShapePenaltyINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(slice_type))
-	append(out, u32(qp))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(slice_type))
+	append(&builder.data, u32(qp))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceSetInterShapePenaltyINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, packed_shape_penalty: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceSetInterShapePenaltyINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceSetInterShapePenaltyINTEL :: proc(builder: ^Builder, result_type: Id, packed_shape_penalty: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceSetInterShapePenaltyINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(packed_shape_penalty))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(packed_shape_penalty))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetDefaultInterDirectionPenaltyINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, slice_type: Id, qp: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetDefaultInterDirectionPenaltyINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetDefaultInterDirectionPenaltyINTEL :: proc(builder: ^Builder, result_type: Id, slice_type: Id, qp: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetDefaultInterDirectionPenaltyINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(slice_type))
-	append(out, u32(qp))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(slice_type))
+	append(&builder.data, u32(qp))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceSetInterDirectionPenaltyINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, direction_cost: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceSetInterDirectionPenaltyINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceSetInterDirectionPenaltyINTEL :: proc(builder: ^Builder, result_type: Id, direction_cost: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceSetInterDirectionPenaltyINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(direction_cost))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(direction_cost))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetDefaultIntraLumaShapePenaltyINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, slice_type: Id, qp: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetDefaultIntraLumaShapePenaltyINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetDefaultIntraLumaShapePenaltyINTEL :: proc(builder: ^Builder, result_type: Id, slice_type: Id, qp: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetDefaultIntraLumaShapePenaltyINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(slice_type))
-	append(out, u32(qp))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(slice_type))
+	append(&builder.data, u32(qp))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetDefaultInterMotionVectorCostTableINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, slice_type: Id, qp: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetDefaultInterMotionVectorCostTableINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetDefaultInterMotionVectorCostTableINTEL :: proc(builder: ^Builder, result_type: Id, slice_type: Id, qp: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetDefaultInterMotionVectorCostTableINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(slice_type))
-	append(out, u32(qp))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(slice_type))
+	append(&builder.data, u32(qp))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetDefaultHighPenaltyCostTableINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetDefaultHighPenaltyCostTableINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetDefaultHighPenaltyCostTableINTEL :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetDefaultHighPenaltyCostTableINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetDefaultMediumPenaltyCostTableINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetDefaultMediumPenaltyCostTableINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetDefaultMediumPenaltyCostTableINTEL :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetDefaultMediumPenaltyCostTableINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetDefaultLowPenaltyCostTableINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetDefaultLowPenaltyCostTableINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetDefaultLowPenaltyCostTableINTEL :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetDefaultLowPenaltyCostTableINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceSetMotionVectorCostFunctionINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, packed_cost_center_delta: Id, packed_cost_table: Id, cost_precision: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceSetMotionVectorCostFunctionINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceSetMotionVectorCostFunctionINTEL :: proc(builder: ^Builder, result_type: Id, packed_cost_center_delta: Id, packed_cost_table: Id, cost_precision: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceSetMotionVectorCostFunctionINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(packed_cost_center_delta))
-	append(out, u32(packed_cost_table))
-	append(out, u32(cost_precision))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(packed_cost_center_delta))
+	append(&builder.data, u32(packed_cost_table))
+	append(&builder.data, u32(cost_precision))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetDefaultIntraLumaModePenaltyINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, slice_type: Id, qp: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetDefaultIntraLumaModePenaltyINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetDefaultIntraLumaModePenaltyINTEL :: proc(builder: ^Builder, result_type: Id, slice_type: Id, qp: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetDefaultIntraLumaModePenaltyINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(slice_type))
-	append(out, u32(qp))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(slice_type))
+	append(&builder.data, u32(qp))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetDefaultNonDcLumaIntraPenaltyINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetDefaultNonDcLumaIntraPenaltyINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetDefaultNonDcLumaIntraPenaltyINTEL :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetDefaultNonDcLumaIntraPenaltyINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetDefaultIntraChromaModeBasePenaltyINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetDefaultIntraChromaModeBasePenaltyINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetDefaultIntraChromaModeBasePenaltyINTEL :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetDefaultIntraChromaModeBasePenaltyINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceSetAcOnlyHaarINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceSetAcOnlyHaarINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceSetAcOnlyHaarINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceSetAcOnlyHaarINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceSetSourceInterlacedFieldPolarityINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, source_field_polarity: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceSetSourceInterlacedFieldPolarityINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceSetSourceInterlacedFieldPolarityINTEL :: proc(builder: ^Builder, result_type: Id, source_field_polarity: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceSetSourceInterlacedFieldPolarityINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(source_field_polarity))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(source_field_polarity))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceSetSingleReferenceInterlacedFieldPolarityINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, reference_field_polarity: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceSetSingleReferenceInterlacedFieldPolarityINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceSetSingleReferenceInterlacedFieldPolarityINTEL :: proc(builder: ^Builder, result_type: Id, reference_field_polarity: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceSetSingleReferenceInterlacedFieldPolarityINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(reference_field_polarity))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(reference_field_polarity))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceSetDualReferenceInterlacedFieldPolaritiesINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, forward_reference_field_polarity: Id, backward_reference_field_polarity: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceSetDualReferenceInterlacedFieldPolaritiesINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceSetDualReferenceInterlacedFieldPolaritiesINTEL :: proc(builder: ^Builder, result_type: Id, forward_reference_field_polarity: Id, backward_reference_field_polarity: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceSetDualReferenceInterlacedFieldPolaritiesINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(forward_reference_field_polarity))
-	append(out, u32(backward_reference_field_polarity))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(forward_reference_field_polarity))
+	append(&builder.data, u32(backward_reference_field_polarity))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceConvertToImePayloadINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceConvertToImePayloadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceConvertToImePayloadINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceConvertToImePayloadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceConvertToImeResultINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceConvertToImeResultINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceConvertToImeResultINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceConvertToImeResultINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceConvertToRefPayloadINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceConvertToRefPayloadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceConvertToRefPayloadINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceConvertToRefPayloadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceConvertToRefResultINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceConvertToRefResultINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceConvertToRefResultINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceConvertToRefResultINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceConvertToSicPayloadINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceConvertToSicPayloadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceConvertToSicPayloadINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceConvertToSicPayloadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceConvertToSicResultINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceConvertToSicResultINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceConvertToSicResultINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceConvertToSicResultINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetMotionVectorsINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetMotionVectorsINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetMotionVectorsINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetMotionVectorsINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetInterDistortionsINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetInterDistortionsINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetInterDistortionsINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetInterDistortionsINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetBestInterDistortionsINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetBestInterDistortionsINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetBestInterDistortionsINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetBestInterDistortionsINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetInterMajorShapeINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetInterMajorShapeINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetInterMajorShapeINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetInterMajorShapeINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetInterMinorShapeINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetInterMinorShapeINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetInterMinorShapeINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetInterMinorShapeINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetInterDirectionsINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetInterDirectionsINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetInterDirectionsINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetInterDirectionsINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetInterMotionVectorCountINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetInterMotionVectorCountINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetInterMotionVectorCountINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetInterMotionVectorCountINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetInterReferenceIdsINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetInterReferenceIdsINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetInterReferenceIdsINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetInterReferenceIdsINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcMceGetInterReferenceInterlacedFieldPolaritiesINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, packed_reference_ids: Id, packed_reference_parameter_field_polarities: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcMceGetInterReferenceInterlacedFieldPolaritiesINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcMceGetInterReferenceInterlacedFieldPolaritiesINTEL :: proc(builder: ^Builder, result_type: Id, packed_reference_ids: Id, packed_reference_parameter_field_polarities: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcMceGetInterReferenceInterlacedFieldPolaritiesINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(packed_reference_ids))
-	append(out, u32(packed_reference_parameter_field_polarities))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(packed_reference_ids))
+	append(&builder.data, u32(packed_reference_parameter_field_polarities))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeInitializeINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_coord: Id, partition_mask: Id, sad_adjustment: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeInitializeINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeInitializeINTEL :: proc(builder: ^Builder, result_type: Id, src_coord: Id, partition_mask: Id, sad_adjustment: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeInitializeINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_coord))
-	append(out, u32(partition_mask))
-	append(out, u32(sad_adjustment))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_coord))
+	append(&builder.data, u32(partition_mask))
+	append(&builder.data, u32(sad_adjustment))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeSetSingleReferenceINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, ref_offset: Id, search_window_config: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeSetSingleReferenceINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeSetSingleReferenceINTEL :: proc(builder: ^Builder, result_type: Id, ref_offset: Id, search_window_config: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeSetSingleReferenceINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(ref_offset))
-	append(out, u32(search_window_config))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(ref_offset))
+	append(&builder.data, u32(search_window_config))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeSetDualReferenceINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, fwd_ref_offset: Id, bwd_ref_offset: Id, search_window_config: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeSetDualReferenceINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeSetDualReferenceINTEL :: proc(builder: ^Builder, result_type: Id, fwd_ref_offset: Id, bwd_ref_offset: Id, search_window_config: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeSetDualReferenceINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(fwd_ref_offset))
-	append(out, u32(bwd_ref_offset))
-	append(out, u32(search_window_config))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(fwd_ref_offset))
+	append(&builder.data, u32(bwd_ref_offset))
+	append(&builder.data, u32(search_window_config))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeRefWindowSizeINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, search_window_config: Id, dual_ref: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeRefWindowSizeINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeRefWindowSizeINTEL :: proc(builder: ^Builder, result_type: Id, search_window_config: Id, dual_ref: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeRefWindowSizeINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(search_window_config))
-	append(out, u32(dual_ref))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(search_window_config))
+	append(&builder.data, u32(dual_ref))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeAdjustRefOffsetINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, ref_offset: Id, src_coord: Id, ref_window_size: Id, image_size: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeAdjustRefOffsetINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeAdjustRefOffsetINTEL :: proc(builder: ^Builder, result_type: Id, ref_offset: Id, src_coord: Id, ref_window_size: Id, image_size: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeAdjustRefOffsetINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(ref_offset))
-	append(out, u32(src_coord))
-	append(out, u32(ref_window_size))
-	append(out, u32(image_size))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(ref_offset))
+	append(&builder.data, u32(src_coord))
+	append(&builder.data, u32(ref_window_size))
+	append(&builder.data, u32(image_size))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeConvertToMcePayloadINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeConvertToMcePayloadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeConvertToMcePayloadINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeConvertToMcePayloadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeSetMaxMotionVectorCountINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, max_motion_vector_count: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeSetMaxMotionVectorCountINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeSetMaxMotionVectorCountINTEL :: proc(builder: ^Builder, result_type: Id, max_motion_vector_count: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeSetMaxMotionVectorCountINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(max_motion_vector_count))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(max_motion_vector_count))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeSetUnidirectionalMixDisableINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeSetUnidirectionalMixDisableINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeSetUnidirectionalMixDisableINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeSetUnidirectionalMixDisableINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeSetEarlySearchTerminationThresholdINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, threshold: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeSetEarlySearchTerminationThresholdINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeSetEarlySearchTerminationThresholdINTEL :: proc(builder: ^Builder, result_type: Id, threshold: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeSetEarlySearchTerminationThresholdINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(threshold))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(threshold))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeSetWeightedSadINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, packed_sad_weights: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeSetWeightedSadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeSetWeightedSadINTEL :: proc(builder: ^Builder, result_type: Id, packed_sad_weights: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeSetWeightedSadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(packed_sad_weights))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(packed_sad_weights))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeEvaluateWithSingleReferenceINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, ref_image: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeEvaluateWithSingleReferenceINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeEvaluateWithSingleReferenceINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, ref_image: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeEvaluateWithSingleReferenceINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(ref_image))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(ref_image))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeEvaluateWithDualReferenceINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, fwd_ref_image: Id, bwd_ref_image: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeEvaluateWithDualReferenceINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeEvaluateWithDualReferenceINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, fwd_ref_image: Id, bwd_ref_image: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeEvaluateWithDualReferenceINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(fwd_ref_image))
-	append(out, u32(bwd_ref_image))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(fwd_ref_image))
+	append(&builder.data, u32(bwd_ref_image))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeEvaluateWithSingleReferenceStreaminINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, ref_image: Id, payload: Id, streamin_components: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeEvaluateWithSingleReferenceStreaminINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeEvaluateWithSingleReferenceStreaminINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, ref_image: Id, payload: Id, streamin_components: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeEvaluateWithSingleReferenceStreaminINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(ref_image))
-	append(out, u32(payload))
-	append(out, u32(streamin_components))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(ref_image))
+	append(&builder.data, u32(payload))
+	append(&builder.data, u32(streamin_components))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeEvaluateWithDualReferenceStreaminINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, fwd_ref_image: Id, bwd_ref_image: Id, payload: Id, streamin_components: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeEvaluateWithDualReferenceStreaminINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeEvaluateWithDualReferenceStreaminINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, fwd_ref_image: Id, bwd_ref_image: Id, payload: Id, streamin_components: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeEvaluateWithDualReferenceStreaminINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(fwd_ref_image))
-	append(out, u32(bwd_ref_image))
-	append(out, u32(payload))
-	append(out, u32(streamin_components))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(fwd_ref_image))
+	append(&builder.data, u32(bwd_ref_image))
+	append(&builder.data, u32(payload))
+	append(&builder.data, u32(streamin_components))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeEvaluateWithSingleReferenceStreamoutINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, ref_image: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeEvaluateWithSingleReferenceStreamoutINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeEvaluateWithSingleReferenceStreamoutINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, ref_image: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeEvaluateWithSingleReferenceStreamoutINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(ref_image))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(ref_image))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeEvaluateWithDualReferenceStreamoutINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, fwd_ref_image: Id, bwd_ref_image: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeEvaluateWithDualReferenceStreamoutINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeEvaluateWithDualReferenceStreamoutINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, fwd_ref_image: Id, bwd_ref_image: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeEvaluateWithDualReferenceStreamoutINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(fwd_ref_image))
-	append(out, u32(bwd_ref_image))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(fwd_ref_image))
+	append(&builder.data, u32(bwd_ref_image))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeEvaluateWithSingleReferenceStreaminoutINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, ref_image: Id, payload: Id, streamin_components: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeEvaluateWithSingleReferenceStreaminoutINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeEvaluateWithSingleReferenceStreaminoutINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, ref_image: Id, payload: Id, streamin_components: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeEvaluateWithSingleReferenceStreaminoutINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(ref_image))
-	append(out, u32(payload))
-	append(out, u32(streamin_components))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(ref_image))
+	append(&builder.data, u32(payload))
+	append(&builder.data, u32(streamin_components))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeEvaluateWithDualReferenceStreaminoutINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, fwd_ref_image: Id, bwd_ref_image: Id, payload: Id, streamin_components: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeEvaluateWithDualReferenceStreaminoutINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeEvaluateWithDualReferenceStreaminoutINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, fwd_ref_image: Id, bwd_ref_image: Id, payload: Id, streamin_components: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeEvaluateWithDualReferenceStreaminoutINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(fwd_ref_image))
-	append(out, u32(bwd_ref_image))
-	append(out, u32(payload))
-	append(out, u32(streamin_components))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(fwd_ref_image))
+	append(&builder.data, u32(bwd_ref_image))
+	append(&builder.data, u32(payload))
+	append(&builder.data, u32(streamin_components))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeConvertToMceResultINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeConvertToMceResultINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeConvertToMceResultINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeConvertToMceResultINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeGetSingleReferenceStreaminINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeGetSingleReferenceStreaminINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeGetSingleReferenceStreaminINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeGetSingleReferenceStreaminINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeGetDualReferenceStreaminINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeGetDualReferenceStreaminINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeGetDualReferenceStreaminINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeGetDualReferenceStreaminINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeStripSingleReferenceStreamoutINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeStripSingleReferenceStreamoutINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeStripSingleReferenceStreamoutINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeStripSingleReferenceStreamoutINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeStripDualReferenceStreamoutINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeStripDualReferenceStreamoutINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeStripDualReferenceStreamoutINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeStripDualReferenceStreamoutINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeGetStreamoutSingleReferenceMajorShapeMotionVectorsINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id, major_shape: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeGetStreamoutSingleReferenceMajorShapeMotionVectorsINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeGetStreamoutSingleReferenceMajorShapeMotionVectorsINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id, major_shape: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeGetStreamoutSingleReferenceMajorShapeMotionVectorsINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
-	append(out, u32(major_shape))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	append(&builder.data, u32(major_shape))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeGetStreamoutSingleReferenceMajorShapeDistortionsINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id, major_shape: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeGetStreamoutSingleReferenceMajorShapeDistortionsINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeGetStreamoutSingleReferenceMajorShapeDistortionsINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id, major_shape: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeGetStreamoutSingleReferenceMajorShapeDistortionsINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
-	append(out, u32(major_shape))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	append(&builder.data, u32(major_shape))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeGetStreamoutSingleReferenceMajorShapeReferenceIdsINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id, major_shape: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeGetStreamoutSingleReferenceMajorShapeReferenceIdsINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeGetStreamoutSingleReferenceMajorShapeReferenceIdsINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id, major_shape: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeGetStreamoutSingleReferenceMajorShapeReferenceIdsINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
-	append(out, u32(major_shape))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	append(&builder.data, u32(major_shape))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeGetStreamoutDualReferenceMajorShapeMotionVectorsINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id, major_shape: Id, direction: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeGetStreamoutDualReferenceMajorShapeMotionVectorsINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeGetStreamoutDualReferenceMajorShapeMotionVectorsINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id, major_shape: Id, direction: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeGetStreamoutDualReferenceMajorShapeMotionVectorsINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
-	append(out, u32(major_shape))
-	append(out, u32(direction))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	append(&builder.data, u32(major_shape))
+	append(&builder.data, u32(direction))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeGetStreamoutDualReferenceMajorShapeDistortionsINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id, major_shape: Id, direction: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeGetStreamoutDualReferenceMajorShapeDistortionsINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeGetStreamoutDualReferenceMajorShapeDistortionsINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id, major_shape: Id, direction: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeGetStreamoutDualReferenceMajorShapeDistortionsINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
-	append(out, u32(major_shape))
-	append(out, u32(direction))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	append(&builder.data, u32(major_shape))
+	append(&builder.data, u32(direction))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeGetStreamoutDualReferenceMajorShapeReferenceIdsINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id, major_shape: Id, direction: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeGetStreamoutDualReferenceMajorShapeReferenceIdsINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeGetStreamoutDualReferenceMajorShapeReferenceIdsINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id, major_shape: Id, direction: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeGetStreamoutDualReferenceMajorShapeReferenceIdsINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
-	append(out, u32(major_shape))
-	append(out, u32(direction))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	append(&builder.data, u32(major_shape))
+	append(&builder.data, u32(direction))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeGetBorderReachedINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, image_select: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeGetBorderReachedINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeGetBorderReachedINTEL :: proc(builder: ^Builder, result_type: Id, image_select: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeGetBorderReachedINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(image_select))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(image_select))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeGetTruncatedSearchIndicationINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeGetTruncatedSearchIndicationINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeGetTruncatedSearchIndicationINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeGetTruncatedSearchIndicationINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeGetUnidirectionalEarlySearchTerminationINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeGetUnidirectionalEarlySearchTerminationINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeGetUnidirectionalEarlySearchTerminationINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeGetUnidirectionalEarlySearchTerminationINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeGetWeightingPatternMinimumMotionVectorINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeGetWeightingPatternMinimumMotionVectorINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeGetWeightingPatternMinimumMotionVectorINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeGetWeightingPatternMinimumMotionVectorINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcImeGetWeightingPatternMinimumDistortionINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcImeGetWeightingPatternMinimumDistortionINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcImeGetWeightingPatternMinimumDistortionINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcImeGetWeightingPatternMinimumDistortionINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcFmeInitializeINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_coord: Id, motion_vectors: Id, major_shapes: Id, minor_shapes: Id, direction: Id, pixel_resolution: Id, sad_adjustment: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcFmeInitializeINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcFmeInitializeINTEL :: proc(builder: ^Builder, result_type: Id, src_coord: Id, motion_vectors: Id, major_shapes: Id, minor_shapes: Id, direction: Id, pixel_resolution: Id, sad_adjustment: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcFmeInitializeINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_coord))
-	append(out, u32(motion_vectors))
-	append(out, u32(major_shapes))
-	append(out, u32(minor_shapes))
-	append(out, u32(direction))
-	append(out, u32(pixel_resolution))
-	append(out, u32(sad_adjustment))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_coord))
+	append(&builder.data, u32(motion_vectors))
+	append(&builder.data, u32(major_shapes))
+	append(&builder.data, u32(minor_shapes))
+	append(&builder.data, u32(direction))
+	append(&builder.data, u32(pixel_resolution))
+	append(&builder.data, u32(sad_adjustment))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcBmeInitializeINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_coord: Id, motion_vectors: Id, major_shapes: Id, minor_shapes: Id, direction: Id, pixel_resolution: Id, bidirectional_weight: Id, sad_adjustment: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcBmeInitializeINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcBmeInitializeINTEL :: proc(builder: ^Builder, result_type: Id, src_coord: Id, motion_vectors: Id, major_shapes: Id, minor_shapes: Id, direction: Id, pixel_resolution: Id, bidirectional_weight: Id, sad_adjustment: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcBmeInitializeINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_coord))
-	append(out, u32(motion_vectors))
-	append(out, u32(major_shapes))
-	append(out, u32(minor_shapes))
-	append(out, u32(direction))
-	append(out, u32(pixel_resolution))
-	append(out, u32(bidirectional_weight))
-	append(out, u32(sad_adjustment))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_coord))
+	append(&builder.data, u32(motion_vectors))
+	append(&builder.data, u32(major_shapes))
+	append(&builder.data, u32(minor_shapes))
+	append(&builder.data, u32(direction))
+	append(&builder.data, u32(pixel_resolution))
+	append(&builder.data, u32(bidirectional_weight))
+	append(&builder.data, u32(sad_adjustment))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcRefConvertToMcePayloadINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcRefConvertToMcePayloadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcRefConvertToMcePayloadINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcRefConvertToMcePayloadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcRefSetBidirectionalMixDisableINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcRefSetBidirectionalMixDisableINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcRefSetBidirectionalMixDisableINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcRefSetBidirectionalMixDisableINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcRefSetBilinearFilterEnableINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcRefSetBilinearFilterEnableINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcRefSetBilinearFilterEnableINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcRefSetBilinearFilterEnableINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcRefEvaluateWithSingleReferenceINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, ref_image: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcRefEvaluateWithSingleReferenceINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcRefEvaluateWithSingleReferenceINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, ref_image: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcRefEvaluateWithSingleReferenceINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(ref_image))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(ref_image))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcRefEvaluateWithDualReferenceINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, fwd_ref_image: Id, bwd_ref_image: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcRefEvaluateWithDualReferenceINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcRefEvaluateWithDualReferenceINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, fwd_ref_image: Id, bwd_ref_image: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcRefEvaluateWithDualReferenceINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(fwd_ref_image))
-	append(out, u32(bwd_ref_image))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(fwd_ref_image))
+	append(&builder.data, u32(bwd_ref_image))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcRefEvaluateWithMultiReferenceINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, packed_reference_ids: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcRefEvaluateWithMultiReferenceINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcRefEvaluateWithMultiReferenceINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, packed_reference_ids: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcRefEvaluateWithMultiReferenceINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(packed_reference_ids))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(packed_reference_ids))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcRefEvaluateWithMultiReferenceInterlacedINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, packed_reference_ids: Id, packed_reference_field_polarities: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcRefEvaluateWithMultiReferenceInterlacedINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcRefEvaluateWithMultiReferenceInterlacedINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, packed_reference_ids: Id, packed_reference_field_polarities: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcRefEvaluateWithMultiReferenceInterlacedINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(packed_reference_ids))
-	append(out, u32(packed_reference_field_polarities))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(packed_reference_ids))
+	append(&builder.data, u32(packed_reference_field_polarities))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcRefConvertToMceResultINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcRefConvertToMceResultINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcRefConvertToMceResultINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcRefConvertToMceResultINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicInitializeINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_coord: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicInitializeINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicInitializeINTEL :: proc(builder: ^Builder, result_type: Id, src_coord: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicInitializeINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_coord))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_coord))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicConfigureSkcINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, skip_block_partition_type: Id, skip_motion_vector_mask: Id, motion_vectors: Id, bidirectional_weight: Id, sad_adjustment: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicConfigureSkcINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicConfigureSkcINTEL :: proc(builder: ^Builder, result_type: Id, skip_block_partition_type: Id, skip_motion_vector_mask: Id, motion_vectors: Id, bidirectional_weight: Id, sad_adjustment: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicConfigureSkcINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(skip_block_partition_type))
-	append(out, u32(skip_motion_vector_mask))
-	append(out, u32(motion_vectors))
-	append(out, u32(bidirectional_weight))
-	append(out, u32(sad_adjustment))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(skip_block_partition_type))
+	append(&builder.data, u32(skip_motion_vector_mask))
+	append(&builder.data, u32(motion_vectors))
+	append(&builder.data, u32(bidirectional_weight))
+	append(&builder.data, u32(sad_adjustment))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicConfigureIpeLumaINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, luma_intra_partition_mask: Id, intra_neighbour_availabilty: Id, left_edge_luma_pixels: Id, upper_left_corner_luma_pixel: Id, upper_edge_luma_pixels: Id, upper_right_edge_luma_pixels: Id, sad_adjustment: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicConfigureIpeLumaINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicConfigureIpeLumaINTEL :: proc(builder: ^Builder, result_type: Id, luma_intra_partition_mask: Id, intra_neighbour_availabilty: Id, left_edge_luma_pixels: Id, upper_left_corner_luma_pixel: Id, upper_edge_luma_pixels: Id, upper_right_edge_luma_pixels: Id, sad_adjustment: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicConfigureIpeLumaINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(luma_intra_partition_mask))
-	append(out, u32(intra_neighbour_availabilty))
-	append(out, u32(left_edge_luma_pixels))
-	append(out, u32(upper_left_corner_luma_pixel))
-	append(out, u32(upper_edge_luma_pixels))
-	append(out, u32(upper_right_edge_luma_pixels))
-	append(out, u32(sad_adjustment))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(luma_intra_partition_mask))
+	append(&builder.data, u32(intra_neighbour_availabilty))
+	append(&builder.data, u32(left_edge_luma_pixels))
+	append(&builder.data, u32(upper_left_corner_luma_pixel))
+	append(&builder.data, u32(upper_edge_luma_pixels))
+	append(&builder.data, u32(upper_right_edge_luma_pixels))
+	append(&builder.data, u32(sad_adjustment))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicConfigureIpeLumaChromaINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, luma_intra_partition_mask: Id, intra_neighbour_availabilty: Id, left_edge_luma_pixels: Id, upper_left_corner_luma_pixel: Id, upper_edge_luma_pixels: Id, upper_right_edge_luma_pixels: Id, left_edge_chroma_pixels: Id, upper_left_corner_chroma_pixel: Id, upper_edge_chroma_pixels: Id, sad_adjustment: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicConfigureIpeLumaChromaINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicConfigureIpeLumaChromaINTEL :: proc(builder: ^Builder, result_type: Id, luma_intra_partition_mask: Id, intra_neighbour_availabilty: Id, left_edge_luma_pixels: Id, upper_left_corner_luma_pixel: Id, upper_edge_luma_pixels: Id, upper_right_edge_luma_pixels: Id, left_edge_chroma_pixels: Id, upper_left_corner_chroma_pixel: Id, upper_edge_chroma_pixels: Id, sad_adjustment: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicConfigureIpeLumaChromaINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(luma_intra_partition_mask))
-	append(out, u32(intra_neighbour_availabilty))
-	append(out, u32(left_edge_luma_pixels))
-	append(out, u32(upper_left_corner_luma_pixel))
-	append(out, u32(upper_edge_luma_pixels))
-	append(out, u32(upper_right_edge_luma_pixels))
-	append(out, u32(left_edge_chroma_pixels))
-	append(out, u32(upper_left_corner_chroma_pixel))
-	append(out, u32(upper_edge_chroma_pixels))
-	append(out, u32(sad_adjustment))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(luma_intra_partition_mask))
+	append(&builder.data, u32(intra_neighbour_availabilty))
+	append(&builder.data, u32(left_edge_luma_pixels))
+	append(&builder.data, u32(upper_left_corner_luma_pixel))
+	append(&builder.data, u32(upper_edge_luma_pixels))
+	append(&builder.data, u32(upper_right_edge_luma_pixels))
+	append(&builder.data, u32(left_edge_chroma_pixels))
+	append(&builder.data, u32(upper_left_corner_chroma_pixel))
+	append(&builder.data, u32(upper_edge_chroma_pixels))
+	append(&builder.data, u32(sad_adjustment))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicGetMotionVectorMaskINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, skip_block_partition_type: Id, direction: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicGetMotionVectorMaskINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicGetMotionVectorMaskINTEL :: proc(builder: ^Builder, result_type: Id, skip_block_partition_type: Id, direction: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicGetMotionVectorMaskINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(skip_block_partition_type))
-	append(out, u32(direction))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(skip_block_partition_type))
+	append(&builder.data, u32(direction))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicConvertToMcePayloadINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicConvertToMcePayloadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicConvertToMcePayloadINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicConvertToMcePayloadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicSetIntraLumaShapePenaltyINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, packed_shape_penalty: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicSetIntraLumaShapePenaltyINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicSetIntraLumaShapePenaltyINTEL :: proc(builder: ^Builder, result_type: Id, packed_shape_penalty: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicSetIntraLumaShapePenaltyINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(packed_shape_penalty))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(packed_shape_penalty))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicSetIntraLumaModeCostFunctionINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, luma_mode_penalty: Id, luma_packed_neighbor_modes: Id, luma_packed_non_dc_penalty: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicSetIntraLumaModeCostFunctionINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicSetIntraLumaModeCostFunctionINTEL :: proc(builder: ^Builder, result_type: Id, luma_mode_penalty: Id, luma_packed_neighbor_modes: Id, luma_packed_non_dc_penalty: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicSetIntraLumaModeCostFunctionINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(luma_mode_penalty))
-	append(out, u32(luma_packed_neighbor_modes))
-	append(out, u32(luma_packed_non_dc_penalty))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(luma_mode_penalty))
+	append(&builder.data, u32(luma_packed_neighbor_modes))
+	append(&builder.data, u32(luma_packed_non_dc_penalty))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicSetIntraChromaModeCostFunctionINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, chroma_mode_base_penalty: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicSetIntraChromaModeCostFunctionINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicSetIntraChromaModeCostFunctionINTEL :: proc(builder: ^Builder, result_type: Id, chroma_mode_base_penalty: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicSetIntraChromaModeCostFunctionINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(chroma_mode_base_penalty))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(chroma_mode_base_penalty))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicSetBilinearFilterEnableINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicSetBilinearFilterEnableINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicSetBilinearFilterEnableINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicSetBilinearFilterEnableINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicSetSkcForwardTransformEnableINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, packed_sad_coefficients: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicSetSkcForwardTransformEnableINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicSetSkcForwardTransformEnableINTEL :: proc(builder: ^Builder, result_type: Id, packed_sad_coefficients: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicSetSkcForwardTransformEnableINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(packed_sad_coefficients))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(packed_sad_coefficients))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicSetBlockBasedRawSkipSadINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, block_based_skip_type: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicSetBlockBasedRawSkipSadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicSetBlockBasedRawSkipSadINTEL :: proc(builder: ^Builder, result_type: Id, block_based_skip_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicSetBlockBasedRawSkipSadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(block_based_skip_type))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(block_based_skip_type))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicEvaluateIpeINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicEvaluateIpeINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicEvaluateIpeINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicEvaluateIpeINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicEvaluateWithSingleReferenceINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, ref_image: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicEvaluateWithSingleReferenceINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicEvaluateWithSingleReferenceINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, ref_image: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicEvaluateWithSingleReferenceINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(ref_image))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(ref_image))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicEvaluateWithDualReferenceINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, fwd_ref_image: Id, bwd_ref_image: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicEvaluateWithDualReferenceINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicEvaluateWithDualReferenceINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, fwd_ref_image: Id, bwd_ref_image: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicEvaluateWithDualReferenceINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(fwd_ref_image))
-	append(out, u32(bwd_ref_image))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(fwd_ref_image))
+	append(&builder.data, u32(bwd_ref_image))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicEvaluateWithMultiReferenceINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, packed_reference_ids: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicEvaluateWithMultiReferenceINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicEvaluateWithMultiReferenceINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, packed_reference_ids: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicEvaluateWithMultiReferenceINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(packed_reference_ids))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(packed_reference_ids))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicEvaluateWithMultiReferenceInterlacedINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, src_image: Id, packed_reference_ids: Id, packed_reference_field_polarities: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicEvaluateWithMultiReferenceInterlacedINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicEvaluateWithMultiReferenceInterlacedINTEL :: proc(builder: ^Builder, result_type: Id, src_image: Id, packed_reference_ids: Id, packed_reference_field_polarities: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicEvaluateWithMultiReferenceInterlacedINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(src_image))
-	append(out, u32(packed_reference_ids))
-	append(out, u32(packed_reference_field_polarities))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(src_image))
+	append(&builder.data, u32(packed_reference_ids))
+	append(&builder.data, u32(packed_reference_field_polarities))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicConvertToMceResultINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicConvertToMceResultINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicConvertToMceResultINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicConvertToMceResultINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicGetIpeLumaShapeINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicGetIpeLumaShapeINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicGetIpeLumaShapeINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicGetIpeLumaShapeINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicGetBestIpeLumaDistortionINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicGetBestIpeLumaDistortionINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicGetBestIpeLumaDistortionINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicGetBestIpeLumaDistortionINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicGetBestIpeChromaDistortionINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicGetBestIpeChromaDistortionINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicGetBestIpeChromaDistortionINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicGetBestIpeChromaDistortionINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicGetPackedIpeLumaModesINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicGetPackedIpeLumaModesINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicGetPackedIpeLumaModesINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicGetPackedIpeLumaModesINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicGetIpeChromaModeINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicGetIpeChromaModeINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicGetIpeChromaModeINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicGetIpeChromaModeINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicGetPackedSkcLumaCountThresholdINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicGetPackedSkcLumaCountThresholdINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicGetPackedSkcLumaCountThresholdINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicGetPackedSkcLumaCountThresholdINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicGetPackedSkcLumaSumThresholdINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicGetPackedSkcLumaSumThresholdINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicGetPackedSkcLumaSumThresholdINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicGetPackedSkcLumaSumThresholdINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpSubgroupAvcSicGetInterRawSadsINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, payload: Id) {
-	start := len(out)
-	append(out, u32(Op.SubgroupAvcSicGetInterRawSadsINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSubgroupAvcSicGetInterRawSadsINTEL :: proc(builder: ^Builder, result_type: Id, payload: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupAvcSicGetInterRawSadsINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(payload))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(payload))
+	return builder.current_id^
 }
 
-write_OpVariableLengthArrayINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, length: Id) {
-	start := len(out)
-	append(out, u32(Op.VariableLengthArrayINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpVariableLengthArrayINTEL :: proc(builder: ^Builder, result_type: Id, length: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.VariableLengthArrayINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(length))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(length))
+	return builder.current_id^
 }
 
-write_OpSaveMemoryINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id) {
-	start := len(out)
-	append(out, u32(Op.SaveMemoryINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpSaveMemoryINTEL :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SaveMemoryINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
 }
 
-write_OpRestoreMemoryINTEL :: proc(out: ^[dynamic]u32, ptr: Id) {
-	start := len(out)
-	append(out, u32(Op.RestoreMemoryINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpRestoreMemoryINTEL :: proc(builder: ^Builder, ptr: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RestoreMemoryINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(ptr))
+	append(&builder.data, u32(ptr))
 }
 
-write_OpArbitraryFloatSinCosPiINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, roundingaccuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatSinCosPiINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatSinCosPiINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, roundingaccuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatSinCosPiINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(roundingaccuracy))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(roundingaccuracy))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatCastINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatCastINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatCastINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatCastINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatCastFromIntINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, mresult: u32, fromsign: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatCastFromIntINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatCastFromIntINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, mresult: u32, fromsign: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatCastFromIntINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(mresult))
-	append(out, u32(fromsign))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(fromsign))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatCastToIntINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, tosign: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatCastToIntINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatCastToIntINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, tosign: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatCastToIntINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(tosign))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(tosign))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatAddINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatAddINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatAddINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatAddINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(b))
-	append(out, u32(mb))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(mb))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatSubINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatSubINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatSubINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatSubINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(b))
-	append(out, u32(mb))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(mb))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatMulINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatMulINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatMulINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatMulINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(b))
-	append(out, u32(mb))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(mb))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatDivINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatDivINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatDivINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatDivINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(b))
-	append(out, u32(mb))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(mb))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatGTINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, b: Id, mb: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatGTINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatGTINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, b: Id, mb: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatGTINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(b))
-	append(out, u32(mb))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(mb))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatGEINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, b: Id, mb: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatGEINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatGEINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, b: Id, mb: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatGEINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(b))
-	append(out, u32(mb))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(mb))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatLTINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, b: Id, mb: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatLTINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatLTINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, b: Id, mb: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatLTINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(b))
-	append(out, u32(mb))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(mb))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatLEINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, b: Id, mb: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatLEINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatLEINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, b: Id, mb: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatLEINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(b))
-	append(out, u32(mb))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(mb))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatEQINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, b: Id, mb: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatEQINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatEQINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, b: Id, mb: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatEQINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(b))
-	append(out, u32(mb))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(mb))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatRecipINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatRecipINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatRecipINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatRecipINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatRSqrtINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatRSqrtINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatRSqrtINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatRSqrtINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatCbrtINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatCbrtINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatCbrtINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatCbrtINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatHypotINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatHypotINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatHypotINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatHypotINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(b))
-	append(out, u32(mb))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(mb))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatSqrtINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatSqrtINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
+OpArbitraryFloatSqrtINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatSqrtINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
 }
 
-write_OpArbitraryFloatLogINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatLogINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatLog2INTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatLog2INTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatLog10INTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatLog10INTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatLog1pINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatLog1pINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatExpINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatExpINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatExp2INTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatExp2INTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatExp10INTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatExp10INTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatExpm1INTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatExpm1INTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatSinINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatSinINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatCosINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatCosINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatSinCosINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatSinCosINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatSinPiINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatSinPiINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatCosPiINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatCosPiINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatASinINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatASinINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatASinPiINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatASinPiINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatACosINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, m1: u32, mout: u32, enablesubnormals: u32, roundingmode: u32, roundingaccuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatACosINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(m1))
-	append(out, u32(mout))
-	append(out, u32(enablesubnormals))
-	append(out, u32(roundingmode))
-	append(out, u32(roundingaccuracy))
-}
-
-write_OpArbitraryFloatACosPiINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatACosPiINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatATanINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatATanINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatATanPiINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatATanPiINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatATan2INTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatATan2INTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(b))
-	append(out, u32(mb))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatPowINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatPowINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(b))
-	append(out, u32(mb))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatPowRINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatPowRINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(b))
-	append(out, u32(mb))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpArbitraryFloatPowNINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, ma: u32, b: Id, signofb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) {
-	start := len(out)
-	append(out, u32(Op.ArbitraryFloatPowNINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(ma))
-	append(out, u32(b))
-	append(out, u32(signofb))
-	append(out, u32(mresult))
-	append(out, u32(subnormal))
-	append(out, u32(rounding))
-	append(out, u32(accuracy))
-}
-
-write_OpLoopControlINTEL :: proc(out: ^[dynamic]u32, loop_control_parameters: ..u32) {
-	start := len(out)
-	append(out, u32(Op.LoopControlINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	for loop_control_parameters in loop_control_parameters do append(out, u32(loop_control_parameters))
-}
-
-write_OpAliasDomainDeclINTEL :: proc(out: ^[dynamic]u32, result: Id, name: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.AliasDomainDeclINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result))
-	if name, ok := name.?; ok do append(out, u32(name))
-}
-
-write_OpAliasScopeDeclINTEL :: proc(out: ^[dynamic]u32, result: Id, alias_domain: Id, name: Maybe(Id) = nil) {
-	start := len(out)
-	append(out, u32(Op.AliasScopeDeclINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result))
-	append(out, u32(alias_domain))
-	if name, ok := name.?; ok do append(out, u32(name))
-}
-
-write_OpAliasScopeListDeclINTEL :: proc(out: ^[dynamic]u32, result: Id, _operand_1: ..Id) {
-	start := len(out)
-	append(out, u32(Op.AliasScopeListDeclINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result))
-	for _operand_1 in _operand_1 do append(out, u32(_operand_1))
-}
-
-write_OpFixedSqrtINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) {
-	start := len(out)
-	append(out, u32(Op.FixedSqrtINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(input))
-	append(out, u32(s))
-	append(out, u32(i))
-	append(out, u32(ri))
-	append(out, u32(q))
-	append(out, u32(o))
-}
-
-write_OpFixedRecipINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) {
-	start := len(out)
-	append(out, u32(Op.FixedRecipINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(input))
-	append(out, u32(s))
-	append(out, u32(i))
-	append(out, u32(ri))
-	append(out, u32(q))
-	append(out, u32(o))
-}
-
-write_OpFixedRsqrtINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) {
-	start := len(out)
-	append(out, u32(Op.FixedRsqrtINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(input))
-	append(out, u32(s))
-	append(out, u32(i))
-	append(out, u32(ri))
-	append(out, u32(q))
-	append(out, u32(o))
-}
-
-write_OpFixedSinINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) {
-	start := len(out)
-	append(out, u32(Op.FixedSinINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(input))
-	append(out, u32(s))
-	append(out, u32(i))
-	append(out, u32(ri))
-	append(out, u32(q))
-	append(out, u32(o))
-}
-
-write_OpFixedCosINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) {
-	start := len(out)
-	append(out, u32(Op.FixedCosINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(input))
-	append(out, u32(s))
-	append(out, u32(i))
-	append(out, u32(ri))
-	append(out, u32(q))
-	append(out, u32(o))
-}
-
-write_OpFixedSinCosINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) {
-	start := len(out)
-	append(out, u32(Op.FixedSinCosINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(input))
-	append(out, u32(s))
-	append(out, u32(i))
-	append(out, u32(ri))
-	append(out, u32(q))
-	append(out, u32(o))
-}
-
-write_OpFixedSinPiINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) {
-	start := len(out)
-	append(out, u32(Op.FixedSinPiINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(input))
-	append(out, u32(s))
-	append(out, u32(i))
-	append(out, u32(ri))
-	append(out, u32(q))
-	append(out, u32(o))
-}
-
-write_OpFixedCosPiINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) {
-	start := len(out)
-	append(out, u32(Op.FixedCosPiINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(input))
-	append(out, u32(s))
-	append(out, u32(i))
-	append(out, u32(ri))
-	append(out, u32(q))
-	append(out, u32(o))
-}
-
-write_OpFixedSinCosPiINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) {
-	start := len(out)
-	append(out, u32(Op.FixedSinCosPiINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(input))
-	append(out, u32(s))
-	append(out, u32(i))
-	append(out, u32(ri))
-	append(out, u32(q))
-	append(out, u32(o))
-}
-
-write_OpFixedLogINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) {
-	start := len(out)
-	append(out, u32(Op.FixedLogINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(input))
-	append(out, u32(s))
-	append(out, u32(i))
-	append(out, u32(ri))
-	append(out, u32(q))
-	append(out, u32(o))
-}
-
-write_OpFixedExpINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) {
-	start := len(out)
-	append(out, u32(Op.FixedExpINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(input))
-	append(out, u32(s))
-	append(out, u32(i))
-	append(out, u32(ri))
-	append(out, u32(q))
-	append(out, u32(o))
-}
-
-write_OpPtrCastToCrossWorkgroupINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id) {
-	start := len(out)
-	append(out, u32(Op.PtrCastToCrossWorkgroupINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-}
-
-write_OpCrossWorkgroupCastToPtrINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id) {
-	start := len(out)
-	append(out, u32(Op.CrossWorkgroupCastToPtrINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-}
-
-write_OpReadPipeBlockingINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.ReadPipeBlockingINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
-}
-
-write_OpWritePipeBlockingINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, packet_size: Id, packet_alignment: Id) {
-	start := len(out)
-	append(out, u32(Op.WritePipeBlockingINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(packet_size))
-	append(out, u32(packet_alignment))
-}
-
-write_OpFPGARegINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, input: Id) {
-	start := len(out)
-	append(out, u32(Op.FPGARegINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(input))
-}
-
-write_OpRayQueryGetRayTMinKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetRayTMinKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-}
-
-write_OpRayQueryGetRayFlagsKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetRayFlagsKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-}
-
-write_OpRayQueryGetIntersectionTKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionTKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
-}
-
-write_OpRayQueryGetIntersectionInstanceCustomIndexKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionInstanceCustomIndexKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
-}
-
-write_OpRayQueryGetIntersectionInstanceIdKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionInstanceIdKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
-}
-
-write_OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
-}
-
-write_OpRayQueryGetIntersectionGeometryIndexKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionGeometryIndexKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
-}
-
-write_OpRayQueryGetIntersectionPrimitiveIndexKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionPrimitiveIndexKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
-}
-
-write_OpRayQueryGetIntersectionBarycentricsKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionBarycentricsKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
-}
-
-write_OpRayQueryGetIntersectionFrontFaceKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionFrontFaceKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
-}
-
-write_OpRayQueryGetIntersectionCandidateAABBOpaqueKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionCandidateAABBOpaqueKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-}
-
-write_OpRayQueryGetIntersectionObjectRayDirectionKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionObjectRayDirectionKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
-}
-
-write_OpRayQueryGetIntersectionObjectRayOriginKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionObjectRayOriginKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
-}
-
-write_OpRayQueryGetWorldRayDirectionKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetWorldRayDirectionKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-}
-
-write_OpRayQueryGetWorldRayOriginKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetWorldRayOriginKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-}
-
-write_OpRayQueryGetIntersectionObjectToWorldKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionObjectToWorldKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
-}
-
-write_OpRayQueryGetIntersectionWorldToObjectKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, rayquery: Id, intersection: Id) {
-	start := len(out)
-	append(out, u32(Op.RayQueryGetIntersectionWorldToObjectKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(rayquery))
-	append(out, u32(intersection))
-}
-
-write_OpAtomicFAddEXT :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, pointer: Id, memory: Id, semantics: Id, value: Id) {
-	start := len(out)
-	append(out, u32(Op.AtomicFAddEXT))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(pointer))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-	append(out, u32(value))
-}
-
-write_OpTypeBufferSurfaceINTEL :: proc(out: ^[dynamic]u32, result: Id, accessqualifier: AccessQualifier) {
-	start := len(out)
-	append(out, u32(Op.TypeBufferSurfaceINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result))
-	append(out, transmute(u32)accessqualifier)
-}
-
-write_OpTypeStructContinuedINTEL :: proc(out: ^[dynamic]u32, _operand_0: ..Id) {
-	start := len(out)
-	append(out, u32(Op.TypeStructContinuedINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	for _operand_0 in _operand_0 do append(out, u32(_operand_0))
-}
-
-write_OpConstantCompositeContinuedINTEL :: proc(out: ^[dynamic]u32, constituents: ..Id) {
-	start := len(out)
-	append(out, u32(Op.ConstantCompositeContinuedINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	for constituents in constituents do append(out, u32(constituents))
-}
-
-write_OpSpecConstantCompositeContinuedINTEL :: proc(out: ^[dynamic]u32, constituents: ..Id) {
-	start := len(out)
-	append(out, u32(Op.SpecConstantCompositeContinuedINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	for constituents in constituents do append(out, u32(constituents))
-}
-
-write_OpCompositeConstructContinuedINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, constituents: ..Id) {
-	start := len(out)
-	append(out, u32(Op.CompositeConstructContinuedINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	for constituents in constituents do append(out, u32(constituents))
-}
-
-write_OpConvertFToBF16INTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, float_value: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertFToBF16INTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(float_value))
-}
-
-write_OpConvertBF16ToFINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, bfloat16_value: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertBF16ToFINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(bfloat16_value))
-}
-
-write_OpControlBarrierArriveINTEL :: proc(out: ^[dynamic]u32, execution: Id, memory: Id, semantics: Id) {
-	start := len(out)
-	append(out, u32(Op.ControlBarrierArriveINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(execution))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-}
-
-write_OpControlBarrierWaitINTEL :: proc(out: ^[dynamic]u32, execution: Id, memory: Id, semantics: Id) {
-	start := len(out)
-	append(out, u32(Op.ControlBarrierWaitINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(execution))
-	append(out, u32(memory))
-	append(out, u32(semantics))
-}
-
-write_OpArithmeticFenceEXT :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, target: Id) {
-	start := len(out)
-	append(out, u32(Op.ArithmeticFenceEXT))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(target))
-}
-
-write_OpTaskSequenceCreateINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, function: Id, pipelined: u32, usestallenableclusters: u32, getcapacity: u32, asynccapacity: u32) {
-	start := len(out)
-	append(out, u32(Op.TaskSequenceCreateINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(function))
-	append(out, u32(pipelined))
-	append(out, u32(usestallenableclusters))
-	append(out, u32(getcapacity))
-	append(out, u32(asynccapacity))
-}
-
-write_OpTaskSequenceAsyncINTEL :: proc(out: ^[dynamic]u32, sequence: Id, arguments: ..Id) {
-	start := len(out)
-	append(out, u32(Op.TaskSequenceAsyncINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(sequence))
-	for arguments in arguments do append(out, u32(arguments))
-}
-
-write_OpTaskSequenceGetINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, sequence: Id) {
-	start := len(out)
-	append(out, u32(Op.TaskSequenceGetINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(sequence))
-}
-
-write_OpTaskSequenceReleaseINTEL :: proc(out: ^[dynamic]u32, sequence: Id) {
-	start := len(out)
-	append(out, u32(Op.TaskSequenceReleaseINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(sequence))
-}
-
-write_OpTypeTaskSequenceINTEL :: proc(out: ^[dynamic]u32, result: Id) {
-	start := len(out)
-	append(out, u32(Op.TypeTaskSequenceINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result))
-}
-
-write_OpSubgroupBlockPrefetchINTEL :: proc(out: ^[dynamic]u32, ptr: Id, numbytes: Id, _operand_2: Maybe(MemoryAccess) = nil) {
-	start := len(out)
-	append(out, u32(Op.SubgroupBlockPrefetchINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(ptr))
-	append(out, u32(numbytes))
-	if _operand_2, ok := _operand_2.?; ok do append(out, transmute(u32)_operand_2)
-}
-
-write_OpSubgroup2DBlockLoadINTEL :: proc(out: ^[dynamic]u32, element_size: Id, block_width: Id, block_height: Id, block_count: Id, src_base_pointer: Id, memory_width: Id, memory_height: Id, memory_pitch: Id, coordinate: Id, dst_pointer: Id) {
-	start := len(out)
-	append(out, u32(Op.Subgroup2DBlockLoadINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(element_size))
-	append(out, u32(block_width))
-	append(out, u32(block_height))
-	append(out, u32(block_count))
-	append(out, u32(src_base_pointer))
-	append(out, u32(memory_width))
-	append(out, u32(memory_height))
-	append(out, u32(memory_pitch))
-	append(out, u32(coordinate))
-	append(out, u32(dst_pointer))
-}
-
-write_OpSubgroup2DBlockLoadTransformINTEL :: proc(out: ^[dynamic]u32, element_size: Id, block_width: Id, block_height: Id, block_count: Id, src_base_pointer: Id, memory_width: Id, memory_height: Id, memory_pitch: Id, coordinate: Id, dst_pointer: Id) {
-	start := len(out)
-	append(out, u32(Op.Subgroup2DBlockLoadTransformINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(element_size))
-	append(out, u32(block_width))
-	append(out, u32(block_height))
-	append(out, u32(block_count))
-	append(out, u32(src_base_pointer))
-	append(out, u32(memory_width))
-	append(out, u32(memory_height))
-	append(out, u32(memory_pitch))
-	append(out, u32(coordinate))
-	append(out, u32(dst_pointer))
-}
-
-write_OpSubgroup2DBlockLoadTransposeINTEL :: proc(out: ^[dynamic]u32, element_size: Id, block_width: Id, block_height: Id, block_count: Id, src_base_pointer: Id, memory_width: Id, memory_height: Id, memory_pitch: Id, coordinate: Id, dst_pointer: Id) {
-	start := len(out)
-	append(out, u32(Op.Subgroup2DBlockLoadTransposeINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(element_size))
-	append(out, u32(block_width))
-	append(out, u32(block_height))
-	append(out, u32(block_count))
-	append(out, u32(src_base_pointer))
-	append(out, u32(memory_width))
-	append(out, u32(memory_height))
-	append(out, u32(memory_pitch))
-	append(out, u32(coordinate))
-	append(out, u32(dst_pointer))
-}
-
-write_OpSubgroup2DBlockPrefetchINTEL :: proc(out: ^[dynamic]u32, element_size: Id, block_width: Id, block_height: Id, block_count: Id, src_base_pointer: Id, memory_width: Id, memory_height: Id, memory_pitch: Id, coordinate: Id) {
-	start := len(out)
-	append(out, u32(Op.Subgroup2DBlockPrefetchINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(element_size))
-	append(out, u32(block_width))
-	append(out, u32(block_height))
-	append(out, u32(block_count))
-	append(out, u32(src_base_pointer))
-	append(out, u32(memory_width))
-	append(out, u32(memory_height))
-	append(out, u32(memory_pitch))
-	append(out, u32(coordinate))
-}
-
-write_OpSubgroup2DBlockStoreINTEL :: proc(out: ^[dynamic]u32, element_size: Id, block_width: Id, block_height: Id, block_count: Id, src_pointer: Id, dst_base_pointer: Id, memory_width: Id, memory_height: Id, memory_pitch: Id, coordinate: Id) {
-	start := len(out)
-	append(out, u32(Op.Subgroup2DBlockStoreINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(element_size))
-	append(out, u32(block_width))
-	append(out, u32(block_height))
-	append(out, u32(block_count))
-	append(out, u32(src_pointer))
-	append(out, u32(dst_base_pointer))
-	append(out, u32(memory_width))
-	append(out, u32(memory_height))
-	append(out, u32(memory_pitch))
-	append(out, u32(coordinate))
-}
-
-write_OpSubgroupMatrixMultiplyAccumulateINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, k_dim: Id, matrix_a: Id, matrix_b: Id, matrix_c: Id, _operand_6: Maybe(MatrixMultiplyAccumulateOperands) = nil) {
-	start := len(out)
-	append(out, u32(Op.SubgroupMatrixMultiplyAccumulateINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(k_dim))
-	append(out, u32(matrix_a))
-	append(out, u32(matrix_b))
-	append(out, u32(matrix_c))
-	if _operand_6, ok := _operand_6.?; ok do append(out, transmute(u32)_operand_6)
-}
-
-write_OpBitwiseFunctionINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, a: Id, b: Id, c: Id, lutindex: Id) {
-	start := len(out)
-	append(out, u32(Op.BitwiseFunctionINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(a))
-	append(out, u32(b))
-	append(out, u32(c))
-	append(out, u32(lutindex))
-}
-
-write_OpUntypedVariableLengthArrayINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, element_type: Id, length: Id) {
-	start := len(out)
-	append(out, u32(Op.UntypedVariableLengthArrayINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(element_type))
-	append(out, u32(length))
-}
-
-write_OpConditionalExtensionINTEL :: proc(out: ^[dynamic]u32, condition: Id, name: string) {
-	start := len(out)
-	append(out, u32(Op.ConditionalExtensionINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(condition))
-	write_string(out, name)
-}
-
-write_OpConditionalEntryPointINTEL :: proc(out: ^[dynamic]u32, condition: Id, _operand_1: ExecutionModel, entry_point: Id, name: string, interface: ..Id) {
-	start := len(out)
-	append(out, u32(Op.ConditionalEntryPointINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(condition))
-	append(out, transmute(u32)_operand_1)
-	append(out, u32(entry_point))
-	write_string(out, name)
-	for interface in interface do append(out, u32(interface))
-}
-
-write_OpConditionalCapabilityINTEL :: proc(out: ^[dynamic]u32, condition: Id, capability: Capability) {
-	start := len(out)
-	append(out, u32(Op.ConditionalCapabilityINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(condition))
-	append(out, transmute(u32)capability)
-}
-
-write_OpSpecConstantTargetINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, target: u32, features: ..u32) {
-	start := len(out)
-	append(out, u32(Op.SpecConstantTargetINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(target))
-	for features in features do append(out, u32(features))
-}
-
-write_OpSpecConstantArchitectureINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, category: u32, family: u32, opcode: u32, architecture: u32) {
-	start := len(out)
-	append(out, u32(Op.SpecConstantArchitectureINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(category))
-	append(out, u32(family))
-	append(out, u32(opcode))
-	append(out, u32(architecture))
-}
-
-write_OpSpecConstantCapabilitiesINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, capabilities: ..Capability) {
-	start := len(out)
-	append(out, u32(Op.SpecConstantCapabilitiesINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	for capabilities in capabilities do append(out, transmute(u32)capabilities)
-}
-
-write_OpConditionalCopyObjectINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, _operand_2: ..Id) {
-	start := len(out)
-	append(out, u32(Op.ConditionalCopyObjectINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	for _operand_2 in _operand_2 do append(out, u32(_operand_2))
-}
-
-write_OpGroupIMulKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupIMulKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
-}
-
-write_OpGroupFMulKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupFMulKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
-}
-
-write_OpGroupBitwiseAndKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupBitwiseAndKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
-}
-
-write_OpGroupBitwiseOrKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupBitwiseOrKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
-}
-
-write_OpGroupBitwiseXorKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupBitwiseXorKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
-}
-
-write_OpGroupLogicalAndKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupLogicalAndKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
-}
-
-write_OpGroupLogicalOrKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupLogicalOrKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
-}
-
-write_OpGroupLogicalXorKHR :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, execution: Id, operation: GroupOperation, x: Id) {
-	start := len(out)
-	append(out, u32(Op.GroupLogicalXorKHR))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(execution))
-	append(out, transmute(u32)operation)
-	append(out, u32(x))
-}
-
-write_OpRoundFToTF32INTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, float_value: Id) {
-	start := len(out)
-	append(out, u32(Op.RoundFToTF32INTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(float_value))
-}
-
-write_OpMaskedGatherINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, ptrvector: Id, alignment: u32, mask: Id, fillempty: Id) {
-	start := len(out)
-	append(out, u32(Op.MaskedGatherINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(ptrvector))
-	append(out, u32(alignment))
-	append(out, u32(mask))
-	append(out, u32(fillempty))
-}
-
-write_OpMaskedScatterINTEL :: proc(out: ^[dynamic]u32, inputvector: Id, ptrvector: Id, alignment: u32, mask: Id) {
-	start := len(out)
-	append(out, u32(Op.MaskedScatterINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(inputvector))
-	append(out, u32(ptrvector))
-	append(out, u32(alignment))
-	append(out, u32(mask))
-}
-
-write_OpConvertHandleToImageINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertHandleToImageINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
-}
-
-write_OpConvertHandleToSamplerINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertHandleToSamplerINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
-}
-
-write_OpConvertHandleToSampledImageINTEL :: proc(out: ^[dynamic]u32, result_type: Id, result: Id, operand: Id) {
-	start := len(out)
-	append(out, u32(Op.ConvertHandleToSampledImageINTEL))
-	defer out[start] |= u32(len(out) - start) << 16
-
-	append(out, u32(result_type))
-	append(out, u32(result))
-	append(out, u32(operand))
+OpArbitraryFloatLogINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatLogINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatLog2INTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatLog2INTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatLog10INTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatLog10INTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatLog1pINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatLog1pINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatExpINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatExpINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatExp2INTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatExp2INTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatExp10INTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatExp10INTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatExpm1INTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatExpm1INTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatSinINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatSinINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatCosINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatCosINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatSinCosINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatSinCosINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatSinPiINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatSinPiINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatCosPiINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatCosPiINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatASinINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatASinINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatASinPiINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatASinPiINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatACosINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, m1: u32, mout: u32, enablesubnormals: u32, roundingmode: u32, roundingaccuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatACosINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(m1))
+	append(&builder.data, u32(mout))
+	append(&builder.data, u32(enablesubnormals))
+	append(&builder.data, u32(roundingmode))
+	append(&builder.data, u32(roundingaccuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatACosPiINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatACosPiINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatATanINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatATanINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatATanPiINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatATanPiINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatATan2INTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatATan2INTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(mb))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatPowINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatPowINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(mb))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatPowRINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, b: Id, mb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatPowRINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(mb))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpArbitraryFloatPowNINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, b: Id, signofb: u32, mresult: u32, subnormal: u32, rounding: u32, accuracy: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArbitraryFloatPowNINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(ma))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(signofb))
+	append(&builder.data, u32(mresult))
+	append(&builder.data, u32(subnormal))
+	append(&builder.data, u32(rounding))
+	append(&builder.data, u32(accuracy))
+	return builder.current_id^
+}
+
+OpLoopControlINTEL :: proc(builder: ^Builder, loop_control_parameters: ..u32) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.LoopControlINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	for loop_control_parameters in loop_control_parameters do append(&builder.data, u32(loop_control_parameters))
+}
+
+OpAliasDomainDeclINTEL :: proc(builder: ^Builder, name: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AliasDomainDeclINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, next_id(builder))
+	if name, ok := name.?; ok do append(&builder.data, u32(name))
+	return builder.current_id^
+}
+
+OpAliasScopeDeclINTEL :: proc(builder: ^Builder, alias_domain: Id, name: Maybe(Id) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AliasScopeDeclINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(alias_domain))
+	if name, ok := name.?; ok do append(&builder.data, u32(name))
+	return builder.current_id^
+}
+
+OpAliasScopeListDeclINTEL :: proc(builder: ^Builder, _operand_1: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AliasScopeListDeclINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, next_id(builder))
+	for _operand_1 in _operand_1 do append(&builder.data, u32(_operand_1))
+	return builder.current_id^
+}
+
+OpFixedSqrtINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FixedSqrtINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(input))
+	append(&builder.data, u32(s))
+	append(&builder.data, u32(i))
+	append(&builder.data, u32(ri))
+	append(&builder.data, u32(q))
+	append(&builder.data, u32(o))
+	return builder.current_id^
+}
+
+OpFixedRecipINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FixedRecipINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(input))
+	append(&builder.data, u32(s))
+	append(&builder.data, u32(i))
+	append(&builder.data, u32(ri))
+	append(&builder.data, u32(q))
+	append(&builder.data, u32(o))
+	return builder.current_id^
+}
+
+OpFixedRsqrtINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FixedRsqrtINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(input))
+	append(&builder.data, u32(s))
+	append(&builder.data, u32(i))
+	append(&builder.data, u32(ri))
+	append(&builder.data, u32(q))
+	append(&builder.data, u32(o))
+	return builder.current_id^
+}
+
+OpFixedSinINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FixedSinINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(input))
+	append(&builder.data, u32(s))
+	append(&builder.data, u32(i))
+	append(&builder.data, u32(ri))
+	append(&builder.data, u32(q))
+	append(&builder.data, u32(o))
+	return builder.current_id^
+}
+
+OpFixedCosINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FixedCosINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(input))
+	append(&builder.data, u32(s))
+	append(&builder.data, u32(i))
+	append(&builder.data, u32(ri))
+	append(&builder.data, u32(q))
+	append(&builder.data, u32(o))
+	return builder.current_id^
+}
+
+OpFixedSinCosINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FixedSinCosINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(input))
+	append(&builder.data, u32(s))
+	append(&builder.data, u32(i))
+	append(&builder.data, u32(ri))
+	append(&builder.data, u32(q))
+	append(&builder.data, u32(o))
+	return builder.current_id^
+}
+
+OpFixedSinPiINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FixedSinPiINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(input))
+	append(&builder.data, u32(s))
+	append(&builder.data, u32(i))
+	append(&builder.data, u32(ri))
+	append(&builder.data, u32(q))
+	append(&builder.data, u32(o))
+	return builder.current_id^
+}
+
+OpFixedCosPiINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FixedCosPiINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(input))
+	append(&builder.data, u32(s))
+	append(&builder.data, u32(i))
+	append(&builder.data, u32(ri))
+	append(&builder.data, u32(q))
+	append(&builder.data, u32(o))
+	return builder.current_id^
+}
+
+OpFixedSinCosPiINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FixedSinCosPiINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(input))
+	append(&builder.data, u32(s))
+	append(&builder.data, u32(i))
+	append(&builder.data, u32(ri))
+	append(&builder.data, u32(q))
+	append(&builder.data, u32(o))
+	return builder.current_id^
+}
+
+OpFixedLogINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FixedLogINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(input))
+	append(&builder.data, u32(s))
+	append(&builder.data, u32(i))
+	append(&builder.data, u32(ri))
+	append(&builder.data, u32(q))
+	append(&builder.data, u32(o))
+	return builder.current_id^
+}
+
+OpFixedExpINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, i: u32, ri: u32, q: u32, o: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FixedExpINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(input))
+	append(&builder.data, u32(s))
+	append(&builder.data, u32(i))
+	append(&builder.data, u32(ri))
+	append(&builder.data, u32(q))
+	append(&builder.data, u32(o))
+	return builder.current_id^
+}
+
+OpPtrCastToCrossWorkgroupINTEL :: proc(builder: ^Builder, result_type: Id, pointer: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.PtrCastToCrossWorkgroupINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	return builder.current_id^
+}
+
+OpCrossWorkgroupCastToPtrINTEL :: proc(builder: ^Builder, result_type: Id, pointer: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CrossWorkgroupCastToPtrINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	return builder.current_id^
+}
+
+OpReadPipeBlockingINTEL :: proc(builder: ^Builder, result_type: Id, packet_size: Id, packet_alignment: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ReadPipeBlockingINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
+	return builder.current_id^
+}
+
+OpWritePipeBlockingINTEL :: proc(builder: ^Builder, result_type: Id, packet_size: Id, packet_alignment: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.WritePipeBlockingINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(packet_size))
+	append(&builder.data, u32(packet_alignment))
+	return builder.current_id^
+}
+
+OpFPGARegINTEL :: proc(builder: ^Builder, result_type: Id, input: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.FPGARegINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(input))
+	return builder.current_id^
+}
+
+OpRayQueryGetRayTMinKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetRayTMinKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	return builder.current_id^
+}
+
+OpRayQueryGetRayFlagsKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetRayFlagsKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	return builder.current_id^
+}
+
+OpRayQueryGetIntersectionTKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionTKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
+}
+
+OpRayQueryGetIntersectionInstanceCustomIndexKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionInstanceCustomIndexKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
+}
+
+OpRayQueryGetIntersectionInstanceIdKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionInstanceIdKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
+}
+
+OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
+}
+
+OpRayQueryGetIntersectionGeometryIndexKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionGeometryIndexKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
+}
+
+OpRayQueryGetIntersectionPrimitiveIndexKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionPrimitiveIndexKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
+}
+
+OpRayQueryGetIntersectionBarycentricsKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionBarycentricsKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
+}
+
+OpRayQueryGetIntersectionFrontFaceKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionFrontFaceKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
+}
+
+OpRayQueryGetIntersectionCandidateAABBOpaqueKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionCandidateAABBOpaqueKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	return builder.current_id^
+}
+
+OpRayQueryGetIntersectionObjectRayDirectionKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionObjectRayDirectionKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
+}
+
+OpRayQueryGetIntersectionObjectRayOriginKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionObjectRayOriginKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
+}
+
+OpRayQueryGetWorldRayDirectionKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetWorldRayDirectionKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	return builder.current_id^
+}
+
+OpRayQueryGetWorldRayOriginKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetWorldRayOriginKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	return builder.current_id^
+}
+
+OpRayQueryGetIntersectionObjectToWorldKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionObjectToWorldKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
+}
+
+OpRayQueryGetIntersectionWorldToObjectKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RayQueryGetIntersectionWorldToObjectKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(rayquery))
+	append(&builder.data, u32(intersection))
+	return builder.current_id^
+}
+
+OpAtomicFAddEXT :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id, value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.AtomicFAddEXT))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(pointer))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+	append(&builder.data, u32(value))
+	return builder.current_id^
+}
+
+OpTypeBufferSurfaceINTEL :: proc(builder: ^Builder, accessqualifier: AccessQualifier) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeBufferSurfaceINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, next_id(builder))
+	append(&builder.data, transmute(u32)accessqualifier)
+	return builder.current_id^
+}
+
+OpTypeStructContinuedINTEL :: proc(builder: ^Builder, _operand_0: ..Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeStructContinuedINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	for _operand_0 in _operand_0 do append(&builder.data, u32(_operand_0))
+}
+
+OpConstantCompositeContinuedINTEL :: proc(builder: ^Builder, constituents: ..Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConstantCompositeContinuedINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	for constituents in constituents do append(&builder.data, u32(constituents))
+}
+
+OpSpecConstantCompositeContinuedINTEL :: proc(builder: ^Builder, constituents: ..Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SpecConstantCompositeContinuedINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	for constituents in constituents do append(&builder.data, u32(constituents))
+}
+
+OpCompositeConstructContinuedINTEL :: proc(builder: ^Builder, result_type: Id, constituents: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.CompositeConstructContinuedINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	for constituents in constituents do append(&builder.data, u32(constituents))
+	return builder.current_id^
+}
+
+OpConvertFToBF16INTEL :: proc(builder: ^Builder, result_type: Id, float_value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertFToBF16INTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(float_value))
+	return builder.current_id^
+}
+
+OpConvertBF16ToFINTEL :: proc(builder: ^Builder, result_type: Id, bfloat16_value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertBF16ToFINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(bfloat16_value))
+	return builder.current_id^
+}
+
+OpControlBarrierArriveINTEL :: proc(builder: ^Builder, execution: Id, memory: Id, semantics: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ControlBarrierArriveINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+}
+
+OpControlBarrierWaitINTEL :: proc(builder: ^Builder, execution: Id, memory: Id, semantics: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ControlBarrierWaitINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(execution))
+	append(&builder.data, u32(memory))
+	append(&builder.data, u32(semantics))
+}
+
+OpArithmeticFenceEXT :: proc(builder: ^Builder, result_type: Id, target: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ArithmeticFenceEXT))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(target))
+	return builder.current_id^
+}
+
+OpTaskSequenceCreateINTEL :: proc(builder: ^Builder, result_type: Id, function: Id, pipelined: u32, usestallenableclusters: u32, getcapacity: u32, asynccapacity: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TaskSequenceCreateINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(function))
+	append(&builder.data, u32(pipelined))
+	append(&builder.data, u32(usestallenableclusters))
+	append(&builder.data, u32(getcapacity))
+	append(&builder.data, u32(asynccapacity))
+	return builder.current_id^
+}
+
+OpTaskSequenceAsyncINTEL :: proc(builder: ^Builder, sequence: Id, arguments: ..Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TaskSequenceAsyncINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(sequence))
+	for arguments in arguments do append(&builder.data, u32(arguments))
+}
+
+OpTaskSequenceGetINTEL :: proc(builder: ^Builder, result_type: Id, sequence: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TaskSequenceGetINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(sequence))
+	return builder.current_id^
+}
+
+OpTaskSequenceReleaseINTEL :: proc(builder: ^Builder, sequence: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TaskSequenceReleaseINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(sequence))
+}
+
+OpTypeTaskSequenceINTEL :: proc(builder: ^Builder) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.TypeTaskSequenceINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, next_id(builder))
+	return builder.current_id^
+}
+
+OpSubgroupBlockPrefetchINTEL :: proc(builder: ^Builder, ptr: Id, numbytes: Id, _operand_2: Maybe(MemoryAccess) = nil) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupBlockPrefetchINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(ptr))
+	append(&builder.data, u32(numbytes))
+	if _operand_2, ok := _operand_2.?; ok do append(&builder.data, transmute(u32)_operand_2)
+}
+
+OpSubgroup2DBlockLoadINTEL :: proc(builder: ^Builder, element_size: Id, block_width: Id, block_height: Id, block_count: Id, src_base_pointer: Id, memory_width: Id, memory_height: Id, memory_pitch: Id, coordinate: Id, dst_pointer: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Subgroup2DBlockLoadINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(element_size))
+	append(&builder.data, u32(block_width))
+	append(&builder.data, u32(block_height))
+	append(&builder.data, u32(block_count))
+	append(&builder.data, u32(src_base_pointer))
+	append(&builder.data, u32(memory_width))
+	append(&builder.data, u32(memory_height))
+	append(&builder.data, u32(memory_pitch))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(dst_pointer))
+}
+
+OpSubgroup2DBlockLoadTransformINTEL :: proc(builder: ^Builder, element_size: Id, block_width: Id, block_height: Id, block_count: Id, src_base_pointer: Id, memory_width: Id, memory_height: Id, memory_pitch: Id, coordinate: Id, dst_pointer: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Subgroup2DBlockLoadTransformINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(element_size))
+	append(&builder.data, u32(block_width))
+	append(&builder.data, u32(block_height))
+	append(&builder.data, u32(block_count))
+	append(&builder.data, u32(src_base_pointer))
+	append(&builder.data, u32(memory_width))
+	append(&builder.data, u32(memory_height))
+	append(&builder.data, u32(memory_pitch))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(dst_pointer))
+}
+
+OpSubgroup2DBlockLoadTransposeINTEL :: proc(builder: ^Builder, element_size: Id, block_width: Id, block_height: Id, block_count: Id, src_base_pointer: Id, memory_width: Id, memory_height: Id, memory_pitch: Id, coordinate: Id, dst_pointer: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Subgroup2DBlockLoadTransposeINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(element_size))
+	append(&builder.data, u32(block_width))
+	append(&builder.data, u32(block_height))
+	append(&builder.data, u32(block_count))
+	append(&builder.data, u32(src_base_pointer))
+	append(&builder.data, u32(memory_width))
+	append(&builder.data, u32(memory_height))
+	append(&builder.data, u32(memory_pitch))
+	append(&builder.data, u32(coordinate))
+	append(&builder.data, u32(dst_pointer))
+}
+
+OpSubgroup2DBlockPrefetchINTEL :: proc(builder: ^Builder, element_size: Id, block_width: Id, block_height: Id, block_count: Id, src_base_pointer: Id, memory_width: Id, memory_height: Id, memory_pitch: Id, coordinate: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Subgroup2DBlockPrefetchINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(element_size))
+	append(&builder.data, u32(block_width))
+	append(&builder.data, u32(block_height))
+	append(&builder.data, u32(block_count))
+	append(&builder.data, u32(src_base_pointer))
+	append(&builder.data, u32(memory_width))
+	append(&builder.data, u32(memory_height))
+	append(&builder.data, u32(memory_pitch))
+	append(&builder.data, u32(coordinate))
+}
+
+OpSubgroup2DBlockStoreINTEL :: proc(builder: ^Builder, element_size: Id, block_width: Id, block_height: Id, block_count: Id, src_pointer: Id, dst_base_pointer: Id, memory_width: Id, memory_height: Id, memory_pitch: Id, coordinate: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.Subgroup2DBlockStoreINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(element_size))
+	append(&builder.data, u32(block_width))
+	append(&builder.data, u32(block_height))
+	append(&builder.data, u32(block_count))
+	append(&builder.data, u32(src_pointer))
+	append(&builder.data, u32(dst_base_pointer))
+	append(&builder.data, u32(memory_width))
+	append(&builder.data, u32(memory_height))
+	append(&builder.data, u32(memory_pitch))
+	append(&builder.data, u32(coordinate))
+}
+
+OpSubgroupMatrixMultiplyAccumulateINTEL :: proc(builder: ^Builder, result_type: Id, k_dim: Id, matrix_a: Id, matrix_b: Id, matrix_c: Id, _operand_6: Maybe(MatrixMultiplyAccumulateOperands) = nil) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SubgroupMatrixMultiplyAccumulateINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(k_dim))
+	append(&builder.data, u32(matrix_a))
+	append(&builder.data, u32(matrix_b))
+	append(&builder.data, u32(matrix_c))
+	if _operand_6, ok := _operand_6.?; ok do append(&builder.data, transmute(u32)_operand_6)
+	return builder.current_id^
+}
+
+OpBitwiseFunctionINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, b: Id, c: Id, lutindex: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.BitwiseFunctionINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(a))
+	append(&builder.data, u32(b))
+	append(&builder.data, u32(c))
+	append(&builder.data, u32(lutindex))
+	return builder.current_id^
+}
+
+OpUntypedVariableLengthArrayINTEL :: proc(builder: ^Builder, result_type: Id, element_type: Id, length: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.UntypedVariableLengthArrayINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(element_type))
+	append(&builder.data, u32(length))
+	return builder.current_id^
+}
+
+OpConditionalExtensionINTEL :: proc(builder: ^Builder, condition: Id, name: string) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConditionalExtensionINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(condition))
+	write_string(&builder.data, name)
+}
+
+OpConditionalEntryPointINTEL :: proc(builder: ^Builder, condition: Id, _operand_1: ExecutionModel, entry_point: Id, name: string, interface: ..Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConditionalEntryPointINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(condition))
+	append(&builder.data, transmute(u32)_operand_1)
+	append(&builder.data, u32(entry_point))
+	write_string(&builder.data, name)
+	for interface in interface do append(&builder.data, u32(interface))
+}
+
+OpConditionalCapabilityINTEL :: proc(builder: ^Builder, condition: Id, capability: Capability) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConditionalCapabilityINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(condition))
+	append(&builder.data, transmute(u32)capability)
+}
+
+OpSpecConstantTargetINTEL :: proc(builder: ^Builder, result_type: Id, target: u32, features: ..u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SpecConstantTargetINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(target))
+	for features in features do append(&builder.data, u32(features))
+	return builder.current_id^
+}
+
+OpSpecConstantArchitectureINTEL :: proc(builder: ^Builder, result_type: Id, category: u32, family: u32, opcode: u32, architecture: u32) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SpecConstantArchitectureINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(category))
+	append(&builder.data, u32(family))
+	append(&builder.data, u32(opcode))
+	append(&builder.data, u32(architecture))
+	return builder.current_id^
+}
+
+OpSpecConstantCapabilitiesINTEL :: proc(builder: ^Builder, result_type: Id, capabilities: ..Capability) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.SpecConstantCapabilitiesINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	for capabilities in capabilities do append(&builder.data, transmute(u32)capabilities)
+	return builder.current_id^
+}
+
+OpConditionalCopyObjectINTEL :: proc(builder: ^Builder, result_type: Id, _operand_2: ..Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConditionalCopyObjectINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	for _operand_2 in _operand_2 do append(&builder.data, u32(_operand_2))
+	return builder.current_id^
+}
+
+OpGroupIMulKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupIMulKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
+}
+
+OpGroupFMulKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupFMulKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
+}
+
+OpGroupBitwiseAndKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupBitwiseAndKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
+}
+
+OpGroupBitwiseOrKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupBitwiseOrKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
+}
+
+OpGroupBitwiseXorKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupBitwiseXorKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
+}
+
+OpGroupLogicalAndKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupLogicalAndKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
+}
+
+OpGroupLogicalOrKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupLogicalOrKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
+}
+
+OpGroupLogicalXorKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, operation: GroupOperation, x: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.GroupLogicalXorKHR))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(execution))
+	append(&builder.data, transmute(u32)operation)
+	append(&builder.data, u32(x))
+	return builder.current_id^
+}
+
+OpRoundFToTF32INTEL :: proc(builder: ^Builder, result_type: Id, float_value: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.RoundFToTF32INTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(float_value))
+	return builder.current_id^
+}
+
+OpMaskedGatherINTEL :: proc(builder: ^Builder, result_type: Id, ptrvector: Id, alignment: u32, mask: Id, fillempty: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.MaskedGatherINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(ptrvector))
+	append(&builder.data, u32(alignment))
+	append(&builder.data, u32(mask))
+	append(&builder.data, u32(fillempty))
+	return builder.current_id^
+}
+
+OpMaskedScatterINTEL :: proc(builder: ^Builder, inputvector: Id, ptrvector: Id, alignment: u32, mask: Id) -> () {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.MaskedScatterINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(inputvector))
+	append(&builder.data, u32(ptrvector))
+	append(&builder.data, u32(alignment))
+	append(&builder.data, u32(mask))
+}
+
+OpConvertHandleToImageINTEL :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertHandleToImageINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
+}
+
+OpConvertHandleToSamplerINTEL :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertHandleToSamplerINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
+}
+
+OpConvertHandleToSampledImageINTEL :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
+	start := len(builder.data)
+	append(&builder.data, u32(Op.ConvertHandleToSampledImageINTEL))
+	defer builder.data[start] |= u32(len(builder.data) - start) << 16
+
+	append(&builder.data, u32(result_type))
+	append(&builder.data, next_id(builder))
+	append(&builder.data, u32(operand))
+	return builder.current_id^
 }
 
 Op :: enum u32 {

@@ -55,7 +55,7 @@ main :: proc() {
 	grammar: Grammar
 	err := json.unmarshal(
 		os.read_entire_file(
-			"gen/SPIRV-Headers/include/spirv/unified1/spirv.core.grammar.json",
+			"generator/SPIRV-Headers/include/spirv/unified1/spirv.core.grammar.json",
 		) or_else panic("Failed to read json grammar file"),
 		&grammar,
 	)
@@ -76,6 +76,34 @@ main :: proc() {
 
 	fmt.sbprintln(&b,
 `
+Builder :: struct {
+	data:       [dynamic]u32,
+	current_id: ^Id,
+}
+
+builder_init :: proc(builder: ^Builder, generator_magic: u32, id: ^Id, allocator := context.allocator) {
+	builder.data       = make([dynamic]u32, allocator)
+	builder.current_id = id
+
+	append(&builder.data, MAGIC_NUMBER)
+	append(&builder.data, VERSION)
+	append(&builder.data, generator_magic)
+	append(&builder.data, 4194303)
+	append(&builder.data, 0)
+}
+
+builder_destroy :: proc(builder: ^Builder) {
+	delete(builder.data)
+}
+
+// you should write the id bound into this index of the _final_ SPIR-V u32 array
+ID_BOUND_INDEX :: 3
+
+next_id :: proc(builder: ^Builder) -> u32 {
+	builder.current_id^ += 1
+	return u32(builder.current_id^)
+}
+
 write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 	start := len(instructions)
 	resize(instructions, len(instructions) + (len(str) + 1 + 3) / 4)
@@ -163,12 +191,19 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 		}
 	}
 
-	bb: strings.Builder
-	ob: strings.Builder
+	
+	delete_key(&enums, "PairIdRefLiteralInteger")
+	delete_key(&enums, "PairIdRefIdRef")
+	delete_key(&enums, "PairLiteralIntegerIdRef")
+
+	bb:      strings.Builder
+	ob:      strings.Builder
+	results: strings.Builder
 	fmt.sbprintfln(&ob, "Op :: enum u32 {{")
 	for inst in grammar.instructions {
-		fmt.sbprint(&b, "write_", inst.opname, " :: proc(out: ^[dynamic]u32", sep = "")
+		fmt.sbprint(&b, inst.opname, " :: proc(builder: ^Builder", sep = "")
 		fmt.sbprintfln(&ob, "\t%s = %v,", inst.opname[2:], inst.opcode)
+		has_result: bool
 		for operand, operand_i in inst.operands {
 			name := operand.name
 			if name == "" || strings.contains(name, ".") {
@@ -197,40 +232,43 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 				fmt.sbprintf(&bb, "\t")
 			}
 
+			result: bool
 			find_type: {
 				if operand.kind in enums {
 					type = operand.kind
-					fmt.sbprintfln(&bb, "append(out, transmute(u32)%s)", name)
+					fmt.sbprintfln(&bb, "append(&builder.data, transmute(u32)%s)", name)
 					break find_type
 				}
 
 				switch operand.kind {
 				case "LiteralString":
 					type = "string"
-					fmt.sbprintfln(&bb, "write_string(out, %s)", name)
+					fmt.sbprintfln(&bb, "write_string(&builder.data, %s)", name)
 				case "LiteralInteger", "LiteralExtInstInteger", "LiteralContextDependentNumber", "LiteralSpecConstantOpInteger":
-					fmt.sbprintfln(&bb, "append(out, u32(%s))", name)
+					fmt.sbprintfln(&bb, "append(&builder.data, u32(%s))", name)
 					type = "u32"
 				case "IdResult":
-					name = "result"
-					fmt.sbprintfln(&bb, "append(out, u32(%s))", name)
-					type = "Id"
+					name       = "result"
+					type       = "Id"
+					result     = true
+					has_result = true
+					fmt.sbprintfln(&bb, "append(&builder.data, next_id(builder))")
 				case "IdResultType":
 					name = "result_type"
-					fmt.sbprintfln(&bb, "append(out, u32(%s))", name)
 					type = "Id"
+					fmt.sbprintfln(&bb, "append(&builder.data, u32(%s))", name)
 				case "IdRef", "IdScope", "IdMemorySemantics":
-					fmt.sbprintfln(&bb, "append(out, u32(%s))", name)
+					fmt.sbprintfln(&bb, "append(&builder.data, u32(%s))", name)
 					type = "Id"
 				case "PairIdRefLiteralInteger":
 					type = "struct { id: Id, literal: u32, }"
-					fmt.sbprintfln(&bb, "append(out, u32(%s.id), %s.literal)", name, name)
+					fmt.sbprintfln(&bb, "append(&builder.data, u32(%s.id), %s.literal)", name, name)
 				case "PairIdRefIdRef":
 					type = "[2]Id"
-					fmt.sbprintfln(&bb, "append(out, u32(%s[0]), u32(%s[1]))", name, name)
+					fmt.sbprintfln(&bb, "append(&builder.data, u32(%s[0]), u32(%s[1]))", name, name)
 				case "PairLiteralIntegerIdRef":
 					type = "struct { literal: u32, id: Id, }"
-					fmt.sbprintfln(&bb, "append(out, u32(%s.id), %s.literal)", name, name)
+					fmt.sbprintfln(&bb, "append(&builder.data, u32(%s.id), %s.literal)", name, name)
 				}
 			}
 
@@ -241,17 +279,25 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 				type = fmt.tprintf("..%s", type)
 			}
 
-			fmt.sbprint(&b, ", ", name, ": ", type, sep = "")
+			if result {
+				fmt.sbprint(&results, name, ": ", type, sep = "")
+			} else {
+				fmt.sbprint(&b, ", ", name, ": ", type, sep = "")
+			}
 		}
 
-		fmt.sbprintln(&b, ") {")
-		fmt.sbprintln(&b, "\tstart := len(out)")
-		fmt.sbprintln(&b, "\tappend(out, u32(Op.", inst.opname[2:], "))", sep = "")
-		fmt.sbprintln(&b, "\tdefer out[start] |= u32(len(out) - start) << 16\n")
+		fmt.sbprintfln(&b, ") -> (%s) {{", strings.to_string(results))
+		fmt.sbprintln(&b, "\tstart := len(builder.data)")
+		fmt.sbprintln(&b, "\tappend(&builder.data, u32(Op.", inst.opname[2:], "))", sep = "")
+		fmt.sbprintln(&b, "\tdefer builder.data[start] |= u32(len(builder.data) - start) << 16\n")
 		fmt.sbprint(&b, strings.to_string(bb))
+		if has_result {
+			fmt.sbprintln(&b, "\treturn builder.current_id^")
+		}
 		fmt.sbprintln(&b, "}\n")
 
 		strings.builder_reset(&bb)
+		strings.builder_reset(&results)
 	}
 
 	fmt.sbprintln(&ob, "}")
