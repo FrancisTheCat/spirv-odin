@@ -1931,16 +1931,17 @@ OpInBoundsPtrAccessChain :: proc(builder: ^Builder, result_type: Id, base: Id, e
 	return builder.current_id^
 }
 
-OpDecorate :: proc(builder: ^Builder, target: Id, _operand_1: Decoration) -> () {
+OpDecorate :: proc(builder: ^Builder, target: Id, _operand_1: Decoration, targets: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.Decorate))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(target))
 	append(&builder.data, transmute(u32)_operand_1)
+	for targets in targets do append(&builder.data, u32(targets))
 }
 
-OpMemberDecorate :: proc(builder: ^Builder, structure_type: Id, member: u32, _operand_2: Decoration) -> () {
+OpMemberDecorate :: proc(builder: ^Builder, structure_type: Id, member: u32, _operand_2: Decoration, targets: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.MemberDecorate))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -1948,6 +1949,7 @@ OpMemberDecorate :: proc(builder: ^Builder, structure_type: Id, member: u32, _op
 	append(&builder.data, u32(structure_type))
 	append(&builder.data, u32(member))
 	append(&builder.data, transmute(u32)_operand_2)
+	for targets in targets do append(&builder.data, u32(targets))
 }
 
 OpDecorationGroup :: proc(builder: ^Builder) -> (result: Id) {

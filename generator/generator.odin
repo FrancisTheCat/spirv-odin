@@ -7,6 +7,12 @@ import "core:strings"
 import "core:strconv"
 import "core:slice"
 
+Operand :: struct {
+	kind:       string,
+	quantifier: string,
+	name:       string,
+}
+
 Grammar :: struct {
 	magic_number:  string,
 	major_version: int,
@@ -20,11 +26,7 @@ Grammar :: struct {
 		opname:   string,
 		class:    string,
 		opcode:   u32,
-		operands: []struct {
-			kind:       string,
-			quantifier: string,
-			name:       string,
-		},
+		operands: []Operand,
 		version:  string,
 	},
 	operand_kinds: []struct {
@@ -204,10 +206,19 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 		fmt.sbprint(&b, inst.opname, " :: proc(builder: ^Builder", sep = "")
 		fmt.sbprintfln(&ob, "\t%s = %v,", inst.opname[2:], inst.opcode)
 		has_result: bool
-		for operand, operand_i in inst.operands {
+
+		handle_operand :: proc(
+			b:       ^strings.Builder,
+			bb:      ^strings.Builder,
+			ob:      ^strings.Builder,
+			results: ^strings.Builder,
+			operand: Operand,
+			index:   int,
+			enums:   map[string]struct{},
+		) -> bool {
 			name := operand.name
 			if name == "" || strings.contains(name, ".") {
-				name = fmt.tprint("_operand_", operand_i, sep = "")
+				name = fmt.tprint("_operand_", index, sep = "")
 			} else {
 				name    = strings.to_lower(name, context.temp_allocator)
 				name, _ = strings.replace_all(name, " ", "_", context.temp_allocator)
@@ -225,50 +236,49 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 
 			switch operand.quantifier {
 			case "?":
-				fmt.sbprintf(&bb, "\tif %s, ok := %s.?; ok do ", name, name)
+				fmt.sbprintf(bb, "\tif %s, ok := %s.?; ok do ", name, name)
 			case "*":
-				fmt.sbprintf(&bb, "\tfor %s in %s do ", name, name)
+				fmt.sbprintf(bb, "\tfor %s in %s do ", name, name)
 			case:
-				fmt.sbprintf(&bb, "\t")
+				fmt.sbprintf(bb, "\t")
 			}
 
 			result: bool
 			find_type: {
 				if operand.kind in enums {
 					type = operand.kind
-					fmt.sbprintfln(&bb, "append(&builder.data, transmute(u32)%s)", name)
+					fmt.sbprintfln(bb, "append(&builder.data, transmute(u32)%s)", name)
 					break find_type
 				}
 
 				switch operand.kind {
 				case "LiteralString":
 					type = "string"
-					fmt.sbprintfln(&bb, "write_string(&builder.data, %s)", name)
+					fmt.sbprintfln(bb, "write_string(&builder.data, %s)", name)
 				case "LiteralInteger", "LiteralExtInstInteger", "LiteralContextDependentNumber", "LiteralSpecConstantOpInteger":
-					fmt.sbprintfln(&bb, "append(&builder.data, u32(%s))", name)
+					fmt.sbprintfln(bb, "append(&builder.data, u32(%s))", name)
 					type = "u32"
 				case "IdResult":
 					name       = "result"
 					type       = "Id"
 					result     = true
-					has_result = true
-					fmt.sbprintfln(&bb, "append(&builder.data, next_id(builder))")
+					fmt.sbprintfln(bb, "append(&builder.data, next_id(builder))")
 				case "IdResultType":
 					name = "result_type"
 					type = "Id"
-					fmt.sbprintfln(&bb, "append(&builder.data, u32(%s))", name)
+					fmt.sbprintfln(bb, "append(&builder.data, u32(%s))", name)
 				case "IdRef", "IdScope", "IdMemorySemantics":
-					fmt.sbprintfln(&bb, "append(&builder.data, u32(%s))", name)
+					fmt.sbprintfln(bb, "append(&builder.data, u32(%s))", name)
 					type = "Id"
 				case "PairIdRefLiteralInteger":
 					type = "struct { id: Id, literal: u32, }"
-					fmt.sbprintfln(&bb, "append(&builder.data, u32(%s.id), %s.literal)", name, name)
+					fmt.sbprintfln(bb, "append(&builder.data, u32(%s.id), %s.literal)", name, name)
 				case "PairIdRefIdRef":
 					type = "[2]Id"
-					fmt.sbprintfln(&bb, "append(&builder.data, u32(%s[0]), u32(%s[1]))", name, name)
+					fmt.sbprintfln(bb, "append(&builder.data, u32(%s[0]), u32(%s[1]))", name, name)
 				case "PairLiteralIntegerIdRef":
 					type = "struct { literal: u32, id: Id, }"
-					fmt.sbprintfln(&bb, "append(&builder.data, u32(%s.id), %s.literal)", name, name)
+					fmt.sbprintfln(bb, "append(&builder.data, u32(%s.id), %s.literal)", name, name)
 				}
 			}
 
@@ -280,10 +290,42 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 			}
 
 			if result {
-				fmt.sbprint(&results, name, ": ", type, sep = "")
+				fmt.sbprint(results, name, ": ", type, sep = "")
 			} else {
-				fmt.sbprint(&b, ", ", name, ": ", type, sep = "")
+				fmt.sbprint(b, ", ", name, ": ", type, sep = "")
 			}
+			return result
+		}
+
+		for operand, i in inst.operands {
+			if handle_operand(
+				&b,
+				&bb,
+				&ob,
+				&results,
+				operand,
+				i,
+				enums,
+			) {
+				has_result = true
+			}
+		}
+
+		// wth khronos
+		if inst.opname == "OpDecorate" || inst.opname == "OpMemberDecorate" {
+			handle_operand(
+				&b,
+				&bb,
+				&ob,
+				&results,
+				{
+					kind       = "LiteralInteger",
+					quantifier = "*",
+					name       = "targets",
+				},
+				-1,
+				enums,
+			)
 		}
 
 		fmt.sbprintfln(&b, ") -> (%s) {{", strings.to_string(results))
