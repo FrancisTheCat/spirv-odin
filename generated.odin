@@ -1,47 +1,9 @@
 // This file is auto generated from the official khronos json files
 package spirv
 
-import "core:slice"
-
 VERSION      :: 0x00010600
 REVISION     :: 4
 MAGIC_NUMBER :: 0x07230203
-
-Id :: distinct u32
-
-Builder :: struct {
-	data:       [dynamic]u32,
-	current_id: ^Id,
-}
-
-builder_init :: proc(builder: ^Builder, generator_magic: u32, id: ^Id, allocator := context.allocator) {
-	builder.data       = make([dynamic]u32, allocator)
-	builder.current_id = id
-
-	append(&builder.data, MAGIC_NUMBER)
-	append(&builder.data, VERSION)
-	append(&builder.data, generator_magic)
-	append(&builder.data, 4194303)
-	append(&builder.data, 0)
-}
-
-builder_destroy :: proc(builder: ^Builder) {
-	delete(builder.data)
-}
-
-// you should write the id bound into this index of the _final_ SPIR-V u32 array
-ID_BOUND_INDEX :: 3
-
-next_id :: proc(builder: ^Builder) -> u32 {
-	builder.current_id^ += 1
-	return u32(builder.current_id^)
-}
-
-write_string :: proc(instructions: ^[dynamic]u32, str: string) {
-	start := len(instructions)
-	resize(instructions, len(instructions) + (len(str) + 1 + 3) / 4)
-	copy(slice.to_bytes(instructions[start:]), transmute([]byte)str)
-}
 
 ImageOperands :: bit_set[enum u32 {
 	Bias               = 0,
@@ -1275,6 +1237,7 @@ OpUndef :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -1294,8 +1257,13 @@ OpSource :: proc(builder: ^Builder, _operand_0: SourceLanguage, version: u32, fi
 
 	append(&builder.data, transmute(u32)_operand_0)
 	append(&builder.data, u32(version))
-	if file, ok := file.?; ok do append(&builder.data, u32(file))
-	if source, ok := source.?; ok do write_string(&builder.data, source)
+	if file, ok := file.?; ok {
+		append(&builder.data, u32(file))
+		assert(file != 0)
+	}
+	if source, ok := source.?; ok {
+		write_string(&builder.data, source)
+	}
 }
 
 OpSourceExtension :: proc(builder: ^Builder, extension: string) -> () {
@@ -1312,6 +1280,7 @@ OpName :: proc(builder: ^Builder, target: Id, name: string) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(target))
+	assert(target != 0)
 	write_string(&builder.data, name)
 }
 
@@ -1321,6 +1290,7 @@ OpMemberName :: proc(builder: ^Builder, type: Id, member: u32, name: string) -> 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(type))
+	assert(type != 0)
 	append(&builder.data, u32(member))
 	write_string(&builder.data, name)
 }
@@ -1341,6 +1311,7 @@ OpLine :: proc(builder: ^Builder, file: Id, line: u32, column: u32) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(file))
+	assert(file != 0)
 	append(&builder.data, u32(line))
 	append(&builder.data, u32(column))
 }
@@ -1369,10 +1340,15 @@ OpExtInst :: proc(builder: ^Builder, result_type: Id, set: Id, instruction: u32,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(set))
+	assert(set != 0)
 	append(&builder.data, u32(instruction))
-	for _operand_4 in _operand_4 do append(&builder.data, u32(_operand_4))
+	for _operand_4 in _operand_4 {
+		append(&builder.data, u32(_operand_4))
+		assert(_operand_4 != 0)
+	}
 	return builder.current_id^
 }
 
@@ -1392,8 +1368,12 @@ OpEntryPoint :: proc(builder: ^Builder, _operand_0: ExecutionModel, entry_point:
 
 	append(&builder.data, transmute(u32)_operand_0)
 	append(&builder.data, u32(entry_point))
+	assert(entry_point != 0)
 	write_string(&builder.data, name)
-	for interface in interface do append(&builder.data, u32(interface))
+	for interface in interface {
+		append(&builder.data, u32(interface))
+		assert(interface != 0)
+	}
 }
 
 OpExecutionMode :: proc(builder: ^Builder, entry_point: Id, mode: ExecutionMode) -> () {
@@ -1402,6 +1382,7 @@ OpExecutionMode :: proc(builder: ^Builder, entry_point: Id, mode: ExecutionMode)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(entry_point))
+	assert(entry_point != 0)
 	append(&builder.data, transmute(u32)mode)
 }
 
@@ -1449,7 +1430,9 @@ OpTypeFloat :: proc(builder: ^Builder, width: u32, floating_point_encoding: Mayb
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(width))
-	if floating_point_encoding, ok := floating_point_encoding.?; ok do append(&builder.data, transmute(u32)floating_point_encoding)
+	if floating_point_encoding, ok := floating_point_encoding.?; ok {
+		append(&builder.data, transmute(u32)floating_point_encoding)
+	}
 	return builder.current_id^
 }
 
@@ -1460,6 +1443,7 @@ OpTypeVector :: proc(builder: ^Builder, component_type: Id, component_count: u32
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(component_type))
+	assert(component_type != 0)
 	append(&builder.data, u32(component_count))
 	return builder.current_id^
 }
@@ -1471,6 +1455,7 @@ OpTypeMatrix :: proc(builder: ^Builder, column_type: Id, column_count: u32) -> (
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(column_type))
+	assert(column_type != 0)
 	append(&builder.data, u32(column_count))
 	return builder.current_id^
 }
@@ -1482,13 +1467,16 @@ OpTypeImage :: proc(builder: ^Builder, sampled_type: Id, _operand_2: Dim, depth:
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_type))
+	assert(sampled_type != 0)
 	append(&builder.data, transmute(u32)_operand_2)
 	append(&builder.data, u32(depth))
 	append(&builder.data, u32(arrayed))
 	append(&builder.data, u32(ms))
 	append(&builder.data, u32(sampled))
 	append(&builder.data, transmute(u32)_operand_7)
-	if _operand_8, ok := _operand_8.?; ok do append(&builder.data, transmute(u32)_operand_8)
+	if _operand_8, ok := _operand_8.?; ok {
+		append(&builder.data, transmute(u32)_operand_8)
+	}
 	return builder.current_id^
 }
 
@@ -1508,6 +1496,7 @@ OpTypeSampledImage :: proc(builder: ^Builder, image_type: Id) -> (result: Id) {
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image_type))
+	assert(image_type != 0)
 	return builder.current_id^
 }
 
@@ -1518,7 +1507,9 @@ OpTypeArray :: proc(builder: ^Builder, element_type: Id, length: Id) -> (result:
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(element_type))
+	assert(element_type != 0)
 	append(&builder.data, u32(length))
+	assert(length != 0)
 	return builder.current_id^
 }
 
@@ -1529,6 +1520,7 @@ OpTypeRuntimeArray :: proc(builder: ^Builder, element_type: Id) -> (result: Id) 
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(element_type))
+	assert(element_type != 0)
 	return builder.current_id^
 }
 
@@ -1538,7 +1530,10 @@ OpTypeStruct :: proc(builder: ^Builder, _operand_1: ..Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, next_id(builder))
-	for _operand_1 in _operand_1 do append(&builder.data, u32(_operand_1))
+	for _operand_1 in _operand_1 {
+		append(&builder.data, u32(_operand_1))
+		assert(_operand_1 != 0)
+	}
 	return builder.current_id^
 }
 
@@ -1560,6 +1555,7 @@ OpTypePointer :: proc(builder: ^Builder, _operand_1: StorageClass, type: Id) -> 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, transmute(u32)_operand_1)
 	append(&builder.data, u32(type))
+	assert(type != 0)
 	return builder.current_id^
 }
 
@@ -1570,7 +1566,11 @@ OpTypeFunction :: proc(builder: ^Builder, return_type: Id, _operand_2: ..Id) -> 
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(return_type))
-	for _operand_2 in _operand_2 do append(&builder.data, u32(_operand_2))
+	assert(return_type != 0)
+	for _operand_2 in _operand_2 {
+		append(&builder.data, u32(_operand_2))
+		assert(_operand_2 != 0)
+	}
 	return builder.current_id^
 }
 
@@ -1626,6 +1626,7 @@ OpTypeForwardPointer :: proc(builder: ^Builder, pointer_type: Id, _operand_1: St
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(pointer_type))
+	assert(pointer_type != 0)
 	append(&builder.data, transmute(u32)_operand_1)
 }
 
@@ -1635,6 +1636,7 @@ OpConstantTrue :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -1645,6 +1647,7 @@ OpConstantFalse :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -1655,6 +1658,7 @@ OpConstant :: proc(builder: ^Builder, result_type: Id, value: u32) -> (result: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(value))
 	return builder.current_id^
@@ -1666,8 +1670,12 @@ OpConstantComposite :: proc(builder: ^Builder, result_type: Id, constituents: ..
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
-	for constituents in constituents do append(&builder.data, u32(constituents))
+	for constituents in constituents {
+		append(&builder.data, u32(constituents))
+		assert(constituents != 0)
+	}
 	return builder.current_id^
 }
 
@@ -1677,6 +1685,7 @@ OpConstantSampler :: proc(builder: ^Builder, result_type: Id, _operand_2: Sample
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, transmute(u32)_operand_2)
 	append(&builder.data, u32(param))
@@ -1690,6 +1699,7 @@ OpConstantNull :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -1700,6 +1710,7 @@ OpSpecConstantTrue :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -1710,6 +1721,7 @@ OpSpecConstantFalse :: proc(builder: ^Builder, result_type: Id) -> (result: Id) 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -1720,6 +1732,7 @@ OpSpecConstant :: proc(builder: ^Builder, result_type: Id, value: u32) -> (resul
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(value))
 	return builder.current_id^
@@ -1731,8 +1744,12 @@ OpSpecConstantComposite :: proc(builder: ^Builder, result_type: Id, constituents
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
-	for constituents in constituents do append(&builder.data, u32(constituents))
+	for constituents in constituents {
+		append(&builder.data, u32(constituents))
+		assert(constituents != 0)
+	}
 	return builder.current_id^
 }
 
@@ -1742,6 +1759,7 @@ OpSpecConstantOp :: proc(builder: ^Builder, result_type: Id, opcode: u32) -> (re
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(opcode))
 	return builder.current_id^
@@ -1753,9 +1771,11 @@ OpFunction :: proc(builder: ^Builder, result_type: Id, _operand_2: FunctionContr
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, transmute(u32)_operand_2)
 	append(&builder.data, u32(function_type))
+	assert(function_type != 0)
 	return builder.current_id^
 }
 
@@ -1765,6 +1785,7 @@ OpFunctionParameter :: proc(builder: ^Builder, result_type: Id) -> (result: Id) 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -1782,9 +1803,14 @@ OpFunctionCall :: proc(builder: ^Builder, result_type: Id, function: Id, _operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(function))
-	for _operand_3 in _operand_3 do append(&builder.data, u32(_operand_3))
+	assert(function != 0)
+	for _operand_3 in _operand_3 {
+		append(&builder.data, u32(_operand_3))
+		assert(_operand_3 != 0)
+	}
 	return builder.current_id^
 }
 
@@ -1794,9 +1820,13 @@ OpVariable :: proc(builder: ^Builder, result_type: Id, _operand_2: StorageClass,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, transmute(u32)_operand_2)
-	if initializer, ok := initializer.?; ok do append(&builder.data, u32(initializer))
+	if initializer, ok := initializer.?; ok {
+		append(&builder.data, u32(initializer))
+		assert(initializer != 0)
+	}
 	return builder.current_id^
 }
 
@@ -1806,10 +1836,14 @@ OpImageTexelPointer :: proc(builder: ^Builder, result_type: Id, image: Id, coord
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(sample))
+	assert(sample != 0)
 	return builder.current_id^
 }
 
@@ -1819,9 +1853,13 @@ OpLoad :: proc(builder: ^Builder, result_type: Id, pointer: Id, _operand_3: Mayb
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
-	if _operand_3, ok := _operand_3.?; ok do append(&builder.data, transmute(u32)_operand_3)
+	assert(pointer != 0)
+	if _operand_3, ok := _operand_3.?; ok {
+		append(&builder.data, transmute(u32)_operand_3)
+	}
 	return builder.current_id^
 }
 
@@ -1831,8 +1869,12 @@ OpStore :: proc(builder: ^Builder, pointer: Id, object: Id, _operand_2: Maybe(Me
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(object))
-	if _operand_2, ok := _operand_2.?; ok do append(&builder.data, transmute(u32)_operand_2)
+	assert(object != 0)
+	if _operand_2, ok := _operand_2.?; ok {
+		append(&builder.data, transmute(u32)_operand_2)
+	}
 }
 
 OpCopyMemory :: proc(builder: ^Builder, target: Id, source: Id, _operand_2: Maybe(MemoryAccess) = nil, _operand_3: Maybe(MemoryAccess) = nil) -> () {
@@ -1841,9 +1883,15 @@ OpCopyMemory :: proc(builder: ^Builder, target: Id, source: Id, _operand_2: Mayb
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(target))
+	assert(target != 0)
 	append(&builder.data, u32(source))
-	if _operand_2, ok := _operand_2.?; ok do append(&builder.data, transmute(u32)_operand_2)
-	if _operand_3, ok := _operand_3.?; ok do append(&builder.data, transmute(u32)_operand_3)
+	assert(source != 0)
+	if _operand_2, ok := _operand_2.?; ok {
+		append(&builder.data, transmute(u32)_operand_2)
+	}
+	if _operand_3, ok := _operand_3.?; ok {
+		append(&builder.data, transmute(u32)_operand_3)
+	}
 }
 
 OpCopyMemorySized :: proc(builder: ^Builder, target: Id, source: Id, size: Id, _operand_3: Maybe(MemoryAccess) = nil, _operand_4: Maybe(MemoryAccess) = nil) -> () {
@@ -1852,10 +1900,17 @@ OpCopyMemorySized :: proc(builder: ^Builder, target: Id, source: Id, size: Id, _
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(target))
+	assert(target != 0)
 	append(&builder.data, u32(source))
+	assert(source != 0)
 	append(&builder.data, u32(size))
-	if _operand_3, ok := _operand_3.?; ok do append(&builder.data, transmute(u32)_operand_3)
-	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	assert(size != 0)
+	if _operand_3, ok := _operand_3.?; ok {
+		append(&builder.data, transmute(u32)_operand_3)
+	}
+	if _operand_4, ok := _operand_4.?; ok {
+		append(&builder.data, transmute(u32)_operand_4)
+	}
 }
 
 OpAccessChain :: proc(builder: ^Builder, result_type: Id, base: Id, indexes: ..Id) -> (result: Id) {
@@ -1864,9 +1919,14 @@ OpAccessChain :: proc(builder: ^Builder, result_type: Id, base: Id, indexes: ..I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base))
-	for indexes in indexes do append(&builder.data, u32(indexes))
+	assert(base != 0)
+	for indexes in indexes {
+		append(&builder.data, u32(indexes))
+		assert(indexes != 0)
+	}
 	return builder.current_id^
 }
 
@@ -1876,9 +1936,14 @@ OpInBoundsAccessChain :: proc(builder: ^Builder, result_type: Id, base: Id, inde
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base))
-	for indexes in indexes do append(&builder.data, u32(indexes))
+	assert(base != 0)
+	for indexes in indexes {
+		append(&builder.data, u32(indexes))
+		assert(indexes != 0)
+	}
 	return builder.current_id^
 }
 
@@ -1888,10 +1953,16 @@ OpPtrAccessChain :: proc(builder: ^Builder, result_type: Id, base: Id, element: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base))
+	assert(base != 0)
 	append(&builder.data, u32(element))
-	for indexes in indexes do append(&builder.data, u32(indexes))
+	assert(element != 0)
+	for indexes in indexes {
+		append(&builder.data, u32(indexes))
+		assert(indexes != 0)
+	}
 	return builder.current_id^
 }
 
@@ -1901,8 +1972,10 @@ OpArrayLength :: proc(builder: ^Builder, result_type: Id, structure: Id, array_m
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(structure))
+	assert(structure != 0)
 	append(&builder.data, u32(array_member))
 	return builder.current_id^
 }
@@ -1913,8 +1986,10 @@ OpGenericPtrMemSemantics :: proc(builder: ^Builder, result_type: Id, pointer: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	return builder.current_id^
 }
 
@@ -1924,10 +1999,16 @@ OpInBoundsPtrAccessChain :: proc(builder: ^Builder, result_type: Id, base: Id, e
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base))
+	assert(base != 0)
 	append(&builder.data, u32(element))
-	for indexes in indexes do append(&builder.data, u32(indexes))
+	assert(element != 0)
+	for indexes in indexes {
+		append(&builder.data, u32(indexes))
+		assert(indexes != 0)
+	}
 	return builder.current_id^
 }
 
@@ -1937,8 +2018,11 @@ OpDecorate :: proc(builder: ^Builder, target: Id, _operand_1: Decoration, target
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(target))
+	assert(target != 0)
 	append(&builder.data, transmute(u32)_operand_1)
-	for targets in targets do append(&builder.data, u32(targets))
+	for targets in targets {
+		append(&builder.data, u32(targets))
+	}
 }
 
 OpMemberDecorate :: proc(builder: ^Builder, structure_type: Id, member: u32, _operand_2: Decoration, targets: ..u32) -> () {
@@ -1947,9 +2031,12 @@ OpMemberDecorate :: proc(builder: ^Builder, structure_type: Id, member: u32, _op
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(structure_type))
+	assert(structure_type != 0)
 	append(&builder.data, u32(member))
 	append(&builder.data, transmute(u32)_operand_2)
-	for targets in targets do append(&builder.data, u32(targets))
+	for targets in targets {
+		append(&builder.data, u32(targets))
+	}
 }
 
 OpDecorationGroup :: proc(builder: ^Builder) -> (result: Id) {
@@ -1967,7 +2054,11 @@ OpGroupDecorate :: proc(builder: ^Builder, decoration_group: Id, targets: ..Id) 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(decoration_group))
-	for targets in targets do append(&builder.data, u32(targets))
+	assert(decoration_group != 0)
+	for targets in targets {
+		append(&builder.data, u32(targets))
+		assert(targets != 0)
+	}
 }
 
 OpGroupMemberDecorate :: proc(builder: ^Builder, decoration_group: Id, targets: ..struct { id: Id, literal: u32, }) -> () {
@@ -1976,7 +2067,11 @@ OpGroupMemberDecorate :: proc(builder: ^Builder, decoration_group: Id, targets: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(decoration_group))
-	for targets in targets do append(&builder.data, u32(targets.id), targets.literal)
+	assert(decoration_group != 0)
+	for targets in targets {
+		append(&builder.data, u32(targets.id), targets.literal)
+		assert(targets.id != 0)
+	}
 }
 
 OpVectorExtractDynamic :: proc(builder: ^Builder, result_type: Id, vector: Id, index: Id) -> (result: Id) {
@@ -1985,9 +2080,12 @@ OpVectorExtractDynamic :: proc(builder: ^Builder, result_type: Id, vector: Id, i
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(vector))
+	assert(vector != 0)
 	append(&builder.data, u32(index))
+	assert(index != 0)
 	return builder.current_id^
 }
 
@@ -1997,10 +2095,14 @@ OpVectorInsertDynamic :: proc(builder: ^Builder, result_type: Id, vector: Id, co
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(vector))
+	assert(vector != 0)
 	append(&builder.data, u32(component))
+	assert(component != 0)
 	append(&builder.data, u32(index))
+	assert(index != 0)
 	return builder.current_id^
 }
 
@@ -2010,10 +2112,15 @@ OpVectorShuffle :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(vector_1))
+	assert(vector_1 != 0)
 	append(&builder.data, u32(vector_2))
-	for components in components do append(&builder.data, u32(components))
+	assert(vector_2 != 0)
+	for components in components {
+		append(&builder.data, u32(components))
+	}
 	return builder.current_id^
 }
 
@@ -2023,8 +2130,12 @@ OpCompositeConstruct :: proc(builder: ^Builder, result_type: Id, constituents: .
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
-	for constituents in constituents do append(&builder.data, u32(constituents))
+	for constituents in constituents {
+		append(&builder.data, u32(constituents))
+		assert(constituents != 0)
+	}
 	return builder.current_id^
 }
 
@@ -2034,9 +2145,13 @@ OpCompositeExtract :: proc(builder: ^Builder, result_type: Id, composite: Id, in
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(composite))
-	for indexes in indexes do append(&builder.data, u32(indexes))
+	assert(composite != 0)
+	for indexes in indexes {
+		append(&builder.data, u32(indexes))
+	}
 	return builder.current_id^
 }
 
@@ -2046,10 +2161,15 @@ OpCompositeInsert :: proc(builder: ^Builder, result_type: Id, object: Id, compos
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(object))
+	assert(object != 0)
 	append(&builder.data, u32(composite))
-	for indexes in indexes do append(&builder.data, u32(indexes))
+	assert(composite != 0)
+	for indexes in indexes {
+		append(&builder.data, u32(indexes))
+	}
 	return builder.current_id^
 }
 
@@ -2059,8 +2179,10 @@ OpCopyObject :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -2070,8 +2192,10 @@ OpTranspose :: proc(builder: ^Builder, result_type: Id, matrix_: Id) -> (result:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(matrix_))
+	assert(matrix_ != 0)
 	return builder.current_id^
 }
 
@@ -2081,9 +2205,12 @@ OpSampledImage :: proc(builder: ^Builder, result_type: Id, image: Id, sampler: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	append(&builder.data, u32(sampler))
+	assert(sampler != 0)
 	return builder.current_id^
 }
 
@@ -2093,10 +2220,15 @@ OpImageSampleImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_ima
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	assert(coordinate != 0)
+	if _operand_4, ok := _operand_4.?; ok {
+		append(&builder.data, transmute(u32)_operand_4)
+	}
 	return builder.current_id^
 }
 
@@ -2106,9 +2238,12 @@ OpImageSampleExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_ima
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, transmute(u32)_operand_4)
 	return builder.current_id^
 }
@@ -2119,11 +2254,17 @@ OpImageSampleDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(d_ref_))
-	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	assert(d_ref_ != 0)
+	if _operand_5, ok := _operand_5.?; ok {
+		append(&builder.data, transmute(u32)_operand_5)
+	}
 	return builder.current_id^
 }
 
@@ -2133,10 +2274,14 @@ OpImageSampleDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(d_ref_))
+	assert(d_ref_ != 0)
 	append(&builder.data, transmute(u32)_operand_5)
 	return builder.current_id^
 }
@@ -2147,10 +2292,15 @@ OpImageSampleProjImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	assert(coordinate != 0)
+	if _operand_4, ok := _operand_4.?; ok {
+		append(&builder.data, transmute(u32)_operand_4)
+	}
 	return builder.current_id^
 }
 
@@ -2160,9 +2310,12 @@ OpImageSampleProjExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, transmute(u32)_operand_4)
 	return builder.current_id^
 }
@@ -2173,11 +2326,17 @@ OpImageSampleProjDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sam
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(d_ref_))
-	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	assert(d_ref_ != 0)
+	if _operand_5, ok := _operand_5.?; ok {
+		append(&builder.data, transmute(u32)_operand_5)
+	}
 	return builder.current_id^
 }
 
@@ -2187,10 +2346,14 @@ OpImageSampleProjDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sam
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(d_ref_))
+	assert(d_ref_ != 0)
 	append(&builder.data, transmute(u32)_operand_5)
 	return builder.current_id^
 }
@@ -2201,10 +2364,15 @@ OpImageFetch :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	append(&builder.data, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	assert(coordinate != 0)
+	if _operand_4, ok := _operand_4.?; ok {
+		append(&builder.data, transmute(u32)_operand_4)
+	}
 	return builder.current_id^
 }
 
@@ -2214,11 +2382,17 @@ OpImageGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coo
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(component))
-	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	assert(component != 0)
+	if _operand_5, ok := _operand_5.?; ok {
+		append(&builder.data, transmute(u32)_operand_5)
+	}
 	return builder.current_id^
 }
 
@@ -2228,11 +2402,17 @@ OpImageDrefGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(d_ref_))
-	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	assert(d_ref_ != 0)
+	if _operand_5, ok := _operand_5.?; ok {
+		append(&builder.data, transmute(u32)_operand_5)
+	}
 	return builder.current_id^
 }
 
@@ -2242,10 +2422,15 @@ OpImageRead :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	append(&builder.data, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	assert(coordinate != 0)
+	if _operand_4, ok := _operand_4.?; ok {
+		append(&builder.data, transmute(u32)_operand_4)
+	}
 	return builder.current_id^
 }
 
@@ -2255,9 +2440,14 @@ OpImageWrite :: proc(builder: ^Builder, image: Id, coordinate: Id, texel: Id, _o
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(texel))
-	if _operand_3, ok := _operand_3.?; ok do append(&builder.data, transmute(u32)_operand_3)
+	assert(texel != 0)
+	if _operand_3, ok := _operand_3.?; ok {
+		append(&builder.data, transmute(u32)_operand_3)
+	}
 }
 
 OpImage :: proc(builder: ^Builder, result_type: Id, sampled_image: Id) -> (result: Id) {
@@ -2266,8 +2456,10 @@ OpImage :: proc(builder: ^Builder, result_type: Id, sampled_image: Id) -> (resul
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	return builder.current_id^
 }
 
@@ -2277,8 +2469,10 @@ OpImageQueryFormat :: proc(builder: ^Builder, result_type: Id, image: Id) -> (re
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	return builder.current_id^
 }
 
@@ -2288,8 +2482,10 @@ OpImageQueryOrder :: proc(builder: ^Builder, result_type: Id, image: Id) -> (res
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	return builder.current_id^
 }
 
@@ -2299,9 +2495,12 @@ OpImageQuerySizeLod :: proc(builder: ^Builder, result_type: Id, image: Id, level
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	append(&builder.data, u32(level_of_detail))
+	assert(level_of_detail != 0)
 	return builder.current_id^
 }
 
@@ -2311,8 +2510,10 @@ OpImageQuerySize :: proc(builder: ^Builder, result_type: Id, image: Id) -> (resu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	return builder.current_id^
 }
 
@@ -2322,9 +2523,12 @@ OpImageQueryLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, c
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	return builder.current_id^
 }
 
@@ -2334,8 +2538,10 @@ OpImageQueryLevels :: proc(builder: ^Builder, result_type: Id, image: Id) -> (re
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	return builder.current_id^
 }
 
@@ -2345,8 +2551,10 @@ OpImageQuerySamples :: proc(builder: ^Builder, result_type: Id, image: Id) -> (r
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	return builder.current_id^
 }
 
@@ -2356,8 +2564,10 @@ OpConvertFToU :: proc(builder: ^Builder, result_type: Id, float_value: Id) -> (r
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(float_value))
+	assert(float_value != 0)
 	return builder.current_id^
 }
 
@@ -2367,8 +2577,10 @@ OpConvertFToS :: proc(builder: ^Builder, result_type: Id, float_value: Id) -> (r
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(float_value))
+	assert(float_value != 0)
 	return builder.current_id^
 }
 
@@ -2378,8 +2590,10 @@ OpConvertSToF :: proc(builder: ^Builder, result_type: Id, signed_value: Id) -> (
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(signed_value))
+	assert(signed_value != 0)
 	return builder.current_id^
 }
 
@@ -2389,8 +2603,10 @@ OpConvertUToF :: proc(builder: ^Builder, result_type: Id, unsigned_value: Id) ->
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(unsigned_value))
+	assert(unsigned_value != 0)
 	return builder.current_id^
 }
 
@@ -2400,8 +2616,10 @@ OpUConvert :: proc(builder: ^Builder, result_type: Id, unsigned_value: Id) -> (r
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(unsigned_value))
+	assert(unsigned_value != 0)
 	return builder.current_id^
 }
 
@@ -2411,8 +2629,10 @@ OpSConvert :: proc(builder: ^Builder, result_type: Id, signed_value: Id) -> (res
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(signed_value))
+	assert(signed_value != 0)
 	return builder.current_id^
 }
 
@@ -2422,8 +2642,10 @@ OpFConvert :: proc(builder: ^Builder, result_type: Id, float_value: Id) -> (resu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(float_value))
+	assert(float_value != 0)
 	return builder.current_id^
 }
 
@@ -2433,8 +2655,10 @@ OpQuantizeToF16 :: proc(builder: ^Builder, result_type: Id, value: Id) -> (resul
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -2444,8 +2668,10 @@ OpConvertPtrToU :: proc(builder: ^Builder, result_type: Id, pointer: Id) -> (res
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	return builder.current_id^
 }
 
@@ -2455,8 +2681,10 @@ OpSatConvertSToU :: proc(builder: ^Builder, result_type: Id, signed_value: Id) -
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(signed_value))
+	assert(signed_value != 0)
 	return builder.current_id^
 }
 
@@ -2466,8 +2694,10 @@ OpSatConvertUToS :: proc(builder: ^Builder, result_type: Id, unsigned_value: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(unsigned_value))
+	assert(unsigned_value != 0)
 	return builder.current_id^
 }
 
@@ -2477,8 +2707,10 @@ OpConvertUToPtr :: proc(builder: ^Builder, result_type: Id, integer_value: Id) -
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(integer_value))
+	assert(integer_value != 0)
 	return builder.current_id^
 }
 
@@ -2488,8 +2720,10 @@ OpPtrCastToGeneric :: proc(builder: ^Builder, result_type: Id, pointer: Id) -> (
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	return builder.current_id^
 }
 
@@ -2499,8 +2733,10 @@ OpGenericCastToPtr :: proc(builder: ^Builder, result_type: Id, pointer: Id) -> (
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	return builder.current_id^
 }
 
@@ -2510,8 +2746,10 @@ OpGenericCastToPtrExplicit :: proc(builder: ^Builder, result_type: Id, pointer: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, transmute(u32)storage)
 	return builder.current_id^
 }
@@ -2522,8 +2760,10 @@ OpBitcast :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -2533,8 +2773,10 @@ OpSNegate :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -2544,8 +2786,10 @@ OpFNegate :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -2555,9 +2799,12 @@ OpIAdd :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2567,9 +2814,12 @@ OpFAdd :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2579,9 +2829,12 @@ OpISub :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2591,9 +2844,12 @@ OpFSub :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2603,9 +2859,12 @@ OpIMul :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2615,9 +2874,12 @@ OpFMul :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2627,9 +2889,12 @@ OpUDiv :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2639,9 +2904,12 @@ OpSDiv :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2651,9 +2919,12 @@ OpFDiv :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2663,9 +2934,12 @@ OpUMod :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2675,9 +2949,12 @@ OpSRem :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2687,9 +2964,12 @@ OpSMod :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2699,9 +2979,12 @@ OpFRem :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2711,9 +2994,12 @@ OpFMod :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2723,9 +3009,12 @@ OpVectorTimesScalar :: proc(builder: ^Builder, result_type: Id, vector: Id, scal
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(vector))
+	assert(vector != 0)
 	append(&builder.data, u32(scalar))
+	assert(scalar != 0)
 	return builder.current_id^
 }
 
@@ -2735,9 +3024,12 @@ OpMatrixTimesScalar :: proc(builder: ^Builder, result_type: Id, matrix_: Id, sca
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(matrix_))
+	assert(matrix_ != 0)
 	append(&builder.data, u32(scalar))
+	assert(scalar != 0)
 	return builder.current_id^
 }
 
@@ -2747,9 +3039,12 @@ OpVectorTimesMatrix :: proc(builder: ^Builder, result_type: Id, vector: Id, matr
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(vector))
+	assert(vector != 0)
 	append(&builder.data, u32(matrix_))
+	assert(matrix_ != 0)
 	return builder.current_id^
 }
 
@@ -2759,9 +3054,12 @@ OpMatrixTimesVector :: proc(builder: ^Builder, result_type: Id, matrix_: Id, vec
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(matrix_))
+	assert(matrix_ != 0)
 	append(&builder.data, u32(vector))
+	assert(vector != 0)
 	return builder.current_id^
 }
 
@@ -2771,9 +3069,12 @@ OpMatrixTimesMatrix :: proc(builder: ^Builder, result_type: Id, leftmatrix: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(leftmatrix))
+	assert(leftmatrix != 0)
 	append(&builder.data, u32(rightmatrix))
+	assert(rightmatrix != 0)
 	return builder.current_id^
 }
 
@@ -2783,9 +3084,12 @@ OpOuterProduct :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(vector_1))
+	assert(vector_1 != 0)
 	append(&builder.data, u32(vector_2))
+	assert(vector_2 != 0)
 	return builder.current_id^
 }
 
@@ -2795,9 +3099,12 @@ OpDot :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2: Id) ->
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(vector_1))
+	assert(vector_1 != 0)
 	append(&builder.data, u32(vector_2))
+	assert(vector_2 != 0)
 	return builder.current_id^
 }
 
@@ -2807,9 +3114,12 @@ OpIAddCarry :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2819,9 +3129,12 @@ OpISubBorrow :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2831,9 +3144,12 @@ OpUMulExtended :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2843,9 +3159,12 @@ OpSMulExtended :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2855,8 +3174,10 @@ OpAny :: proc(builder: ^Builder, result_type: Id, vector: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(vector))
+	assert(vector != 0)
 	return builder.current_id^
 }
 
@@ -2866,8 +3187,10 @@ OpAll :: proc(builder: ^Builder, result_type: Id, vector: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(vector))
+	assert(vector != 0)
 	return builder.current_id^
 }
 
@@ -2877,8 +3200,10 @@ OpIsNan :: proc(builder: ^Builder, result_type: Id, x: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -2888,8 +3213,10 @@ OpIsInf :: proc(builder: ^Builder, result_type: Id, x: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -2899,8 +3226,10 @@ OpIsFinite :: proc(builder: ^Builder, result_type: Id, x: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -2910,8 +3239,10 @@ OpIsNormal :: proc(builder: ^Builder, result_type: Id, x: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -2921,8 +3252,10 @@ OpSignBitSet :: proc(builder: ^Builder, result_type: Id, x: Id) -> (result: Id) 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -2932,9 +3265,12 @@ OpLessOrGreater :: proc(builder: ^Builder, result_type: Id, x: Id, y: Id) -> (re
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	append(&builder.data, u32(y))
+	assert(y != 0)
 	return builder.current_id^
 }
 
@@ -2944,9 +3280,12 @@ OpOrdered :: proc(builder: ^Builder, result_type: Id, x: Id, y: Id) -> (result: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	append(&builder.data, u32(y))
+	assert(y != 0)
 	return builder.current_id^
 }
 
@@ -2956,9 +3295,12 @@ OpUnordered :: proc(builder: ^Builder, result_type: Id, x: Id, y: Id) -> (result
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	append(&builder.data, u32(y))
+	assert(y != 0)
 	return builder.current_id^
 }
 
@@ -2968,9 +3310,12 @@ OpLogicalEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2980,9 +3325,12 @@ OpLogicalNotEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, ope
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -2992,9 +3340,12 @@ OpLogicalOr :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3004,9 +3355,12 @@ OpLogicalAnd :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3016,8 +3370,10 @@ OpLogicalNot :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -3027,10 +3383,14 @@ OpSelect :: proc(builder: ^Builder, result_type: Id, condition: Id, object_1: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(condition))
+	assert(condition != 0)
 	append(&builder.data, u32(object_1))
+	assert(object_1 != 0)
 	append(&builder.data, u32(object_2))
+	assert(object_2 != 0)
 	return builder.current_id^
 }
 
@@ -3040,9 +3400,12 @@ OpIEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3052,9 +3415,12 @@ OpINotEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3064,9 +3430,12 @@ OpUGreaterThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3076,9 +3445,12 @@ OpSGreaterThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3088,9 +3460,12 @@ OpUGreaterThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, o
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3100,9 +3475,12 @@ OpSGreaterThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, o
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3112,9 +3490,12 @@ OpULessThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3124,9 +3505,12 @@ OpSLessThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3136,9 +3520,12 @@ OpULessThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, oper
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3148,9 +3535,12 @@ OpSLessThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, oper
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3160,9 +3550,12 @@ OpFOrdEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3172,9 +3565,12 @@ OpFUnordEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3184,9 +3580,12 @@ OpFOrdNotEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3196,9 +3595,12 @@ OpFUnordNotEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, oper
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3208,9 +3610,12 @@ OpFOrdLessThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3220,9 +3625,12 @@ OpFUnordLessThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, oper
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3232,9 +3640,12 @@ OpFOrdGreaterThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, ope
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3244,9 +3655,12 @@ OpFUnordGreaterThan :: proc(builder: ^Builder, result_type: Id, operand_1: Id, o
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3256,9 +3670,12 @@ OpFOrdLessThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, o
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3268,9 +3685,12 @@ OpFUnordLessThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3280,9 +3700,12 @@ OpFOrdGreaterThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3292,9 +3715,12 @@ OpFUnordGreaterThanEqual :: proc(builder: ^Builder, result_type: Id, operand_1: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3304,9 +3730,12 @@ OpShiftRightLogical :: proc(builder: ^Builder, result_type: Id, base: Id, shift:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base))
+	assert(base != 0)
 	append(&builder.data, u32(shift))
+	assert(shift != 0)
 	return builder.current_id^
 }
 
@@ -3316,9 +3745,12 @@ OpShiftRightArithmetic :: proc(builder: ^Builder, result_type: Id, base: Id, shi
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base))
+	assert(base != 0)
 	append(&builder.data, u32(shift))
+	assert(shift != 0)
 	return builder.current_id^
 }
 
@@ -3328,9 +3760,12 @@ OpShiftLeftLogical :: proc(builder: ^Builder, result_type: Id, base: Id, shift: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base))
+	assert(base != 0)
 	append(&builder.data, u32(shift))
+	assert(shift != 0)
 	return builder.current_id^
 }
 
@@ -3340,9 +3775,12 @@ OpBitwiseOr :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3352,9 +3790,12 @@ OpBitwiseXor :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3364,9 +3805,12 @@ OpBitwiseAnd :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -3376,8 +3820,10 @@ OpNot :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -3387,11 +3833,16 @@ OpBitFieldInsert :: proc(builder: ^Builder, result_type: Id, base: Id, insert: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base))
+	assert(base != 0)
 	append(&builder.data, u32(insert))
+	assert(insert != 0)
 	append(&builder.data, u32(offset))
+	assert(offset != 0)
 	append(&builder.data, u32(count))
+	assert(count != 0)
 	return builder.current_id^
 }
 
@@ -3401,10 +3852,14 @@ OpBitFieldSExtract :: proc(builder: ^Builder, result_type: Id, base: Id, offset:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base))
+	assert(base != 0)
 	append(&builder.data, u32(offset))
+	assert(offset != 0)
 	append(&builder.data, u32(count))
+	assert(count != 0)
 	return builder.current_id^
 }
 
@@ -3414,10 +3869,14 @@ OpBitFieldUExtract :: proc(builder: ^Builder, result_type: Id, base: Id, offset:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base))
+	assert(base != 0)
 	append(&builder.data, u32(offset))
+	assert(offset != 0)
 	append(&builder.data, u32(count))
+	assert(count != 0)
 	return builder.current_id^
 }
 
@@ -3427,8 +3886,10 @@ OpBitReverse :: proc(builder: ^Builder, result_type: Id, base: Id) -> (result: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base))
+	assert(base != 0)
 	return builder.current_id^
 }
 
@@ -3438,8 +3899,10 @@ OpBitCount :: proc(builder: ^Builder, result_type: Id, base: Id) -> (result: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base))
+	assert(base != 0)
 	return builder.current_id^
 }
 
@@ -3449,8 +3912,10 @@ OpDPdx :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(p))
+	assert(p != 0)
 	return builder.current_id^
 }
 
@@ -3460,8 +3925,10 @@ OpDPdy :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(p))
+	assert(p != 0)
 	return builder.current_id^
 }
 
@@ -3471,8 +3938,10 @@ OpFwidth :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(p))
+	assert(p != 0)
 	return builder.current_id^
 }
 
@@ -3482,8 +3951,10 @@ OpDPdxFine :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(p))
+	assert(p != 0)
 	return builder.current_id^
 }
 
@@ -3493,8 +3964,10 @@ OpDPdyFine :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(p))
+	assert(p != 0)
 	return builder.current_id^
 }
 
@@ -3504,8 +3977,10 @@ OpFwidthFine :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(p))
+	assert(p != 0)
 	return builder.current_id^
 }
 
@@ -3515,8 +3990,10 @@ OpDPdxCoarse :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(p))
+	assert(p != 0)
 	return builder.current_id^
 }
 
@@ -3526,8 +4003,10 @@ OpDPdyCoarse :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id) 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(p))
+	assert(p != 0)
 	return builder.current_id^
 }
 
@@ -3537,8 +4016,10 @@ OpFwidthCoarse :: proc(builder: ^Builder, result_type: Id, p: Id) -> (result: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(p))
+	assert(p != 0)
 	return builder.current_id^
 }
 
@@ -3562,6 +4043,7 @@ OpEmitStreamVertex :: proc(builder: ^Builder, stream: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(stream))
+	assert(stream != 0)
 }
 
 OpEndStreamPrimitive :: proc(builder: ^Builder, stream: Id) -> () {
@@ -3570,6 +4052,7 @@ OpEndStreamPrimitive :: proc(builder: ^Builder, stream: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(stream))
+	assert(stream != 0)
 }
 
 OpControlBarrier :: proc(builder: ^Builder, execution: Id, memory: Id, semantics: Id) -> () {
@@ -3578,8 +4061,11 @@ OpControlBarrier :: proc(builder: ^Builder, execution: Id, memory: Id, semantics
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 }
 
 OpMemoryBarrier :: proc(builder: ^Builder, memory: Id, semantics: Id) -> () {
@@ -3588,7 +4074,9 @@ OpMemoryBarrier :: proc(builder: ^Builder, memory: Id, semantics: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 }
 
 OpAtomicLoad :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id) -> (result: Id) {
@@ -3597,10 +4085,14 @@ OpAtomicLoad :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	return builder.current_id^
 }
 
@@ -3610,9 +4102,13 @@ OpAtomicStore :: proc(builder: ^Builder, pointer: Id, memory: Id, semantics: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 }
 
 OpAtomicExchange :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, semantics: Id, value: Id) -> (result: Id) {
@@ -3621,11 +4117,16 @@ OpAtomicExchange :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -3635,13 +4136,20 @@ OpAtomicCompareExchange :: proc(builder: ^Builder, result_type: Id, pointer: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(equal))
+	assert(equal != 0)
 	append(&builder.data, u32(unequal))
+	assert(unequal != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	append(&builder.data, u32(comparator))
+	assert(comparator != 0)
 	return builder.current_id^
 }
 
@@ -3651,13 +4159,20 @@ OpAtomicCompareExchangeWeak :: proc(builder: ^Builder, result_type: Id, pointer:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(equal))
+	assert(equal != 0)
 	append(&builder.data, u32(unequal))
+	assert(unequal != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	append(&builder.data, u32(comparator))
+	assert(comparator != 0)
 	return builder.current_id^
 }
 
@@ -3667,10 +4182,14 @@ OpAtomicIIncrement :: proc(builder: ^Builder, result_type: Id, pointer: Id, memo
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	return builder.current_id^
 }
 
@@ -3680,10 +4199,14 @@ OpAtomicIDecrement :: proc(builder: ^Builder, result_type: Id, pointer: Id, memo
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	return builder.current_id^
 }
 
@@ -3693,11 +4216,16 @@ OpAtomicIAdd :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -3707,11 +4235,16 @@ OpAtomicISub :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -3721,11 +4254,16 @@ OpAtomicSMin :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -3735,11 +4273,16 @@ OpAtomicUMin :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -3749,11 +4292,16 @@ OpAtomicSMax :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -3763,11 +4311,16 @@ OpAtomicUMax :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -3777,11 +4330,16 @@ OpAtomicAnd :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -3791,11 +4349,16 @@ OpAtomicOr :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -3805,11 +4368,16 @@ OpAtomicXor :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -3819,8 +4387,13 @@ OpPhi :: proc(builder: ^Builder, result_type: Id, _operand_2: ..[2]Id) -> (resul
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
-	for _operand_2 in _operand_2 do append(&builder.data, u32(_operand_2[0]), u32(_operand_2[1]))
+	for _operand_2 in _operand_2 {
+		append(&builder.data, u32(_operand_2[0]), u32(_operand_2[1]))
+		assert(_operand_2[0] != 0)
+		assert(_operand_2[1] != 0)
+	}
 	return builder.current_id^
 }
 
@@ -3830,7 +4403,9 @@ OpLoopMerge :: proc(builder: ^Builder, merge_block: Id, continue_target: Id, _op
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(merge_block))
+	assert(merge_block != 0)
 	append(&builder.data, u32(continue_target))
+	assert(continue_target != 0)
 	append(&builder.data, transmute(u32)_operand_2)
 }
 
@@ -3840,6 +4415,7 @@ OpSelectionMerge :: proc(builder: ^Builder, merge_block: Id, _operand_1: Selecti
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(merge_block))
+	assert(merge_block != 0)
 	append(&builder.data, transmute(u32)_operand_1)
 }
 
@@ -3858,6 +4434,7 @@ OpBranch :: proc(builder: ^Builder, target_label: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(target_label))
+	assert(target_label != 0)
 }
 
 OpBranchConditional :: proc(builder: ^Builder, condition: Id, true_label: Id, false_label: Id, branch_weights: ..u32) -> () {
@@ -3866,9 +4443,14 @@ OpBranchConditional :: proc(builder: ^Builder, condition: Id, true_label: Id, fa
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(condition))
+	assert(condition != 0)
 	append(&builder.data, u32(true_label))
+	assert(true_label != 0)
 	append(&builder.data, u32(false_label))
-	for branch_weights in branch_weights do append(&builder.data, u32(branch_weights))
+	assert(false_label != 0)
+	for branch_weights in branch_weights {
+		append(&builder.data, u32(branch_weights))
+	}
 }
 
 OpSwitch :: proc(builder: ^Builder, selector: Id, default: Id, target: ..struct { literal: u32, id: Id, }) -> () {
@@ -3877,8 +4459,13 @@ OpSwitch :: proc(builder: ^Builder, selector: Id, default: Id, target: ..struct 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(selector))
+	assert(selector != 0)
 	append(&builder.data, u32(default))
-	for target in target do append(&builder.data, u32(target.id), target.literal)
+	assert(default != 0)
+	for target in target {
+		append(&builder.data, u32(target.id), target.literal)
+		assert(target.id != 0)
+	}
 }
 
 OpKill :: proc(builder: ^Builder) -> () {
@@ -3901,6 +4488,7 @@ OpReturnValue :: proc(builder: ^Builder, value: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(value))
+	assert(value != 0)
 }
 
 OpUnreachable :: proc(builder: ^Builder) -> () {
@@ -3916,6 +4504,7 @@ OpLifetimeStart :: proc(builder: ^Builder, pointer: Id, size: u32) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(size))
 }
 
@@ -3925,6 +4514,7 @@ OpLifetimeStop :: proc(builder: ^Builder, pointer: Id, size: u32) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(size))
 }
 
@@ -3934,13 +4524,20 @@ OpGroupAsyncCopy :: proc(builder: ^Builder, result_type: Id, execution: Id, dest
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(destination))
+	assert(destination != 0)
 	append(&builder.data, u32(source))
+	assert(source != 0)
 	append(&builder.data, u32(num_elements))
+	assert(num_elements != 0)
 	append(&builder.data, u32(stride))
+	assert(stride != 0)
 	append(&builder.data, u32(event))
+	assert(event != 0)
 	return builder.current_id^
 }
 
@@ -3950,8 +4547,11 @@ OpGroupWaitEvents :: proc(builder: ^Builder, execution: Id, num_events: Id, even
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(num_events))
+	assert(num_events != 0)
 	append(&builder.data, u32(events_list))
+	assert(events_list != 0)
 }
 
 OpGroupAll :: proc(builder: ^Builder, result_type: Id, execution: Id, predicate: Id) -> (result: Id) {
@@ -3960,9 +4560,12 @@ OpGroupAll :: proc(builder: ^Builder, result_type: Id, execution: Id, predicate:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(predicate))
+	assert(predicate != 0)
 	return builder.current_id^
 }
 
@@ -3972,9 +4575,12 @@ OpGroupAny :: proc(builder: ^Builder, result_type: Id, execution: Id, predicate:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(predicate))
+	assert(predicate != 0)
 	return builder.current_id^
 }
 
@@ -3984,10 +4590,14 @@ OpGroupBroadcast :: proc(builder: ^Builder, result_type: Id, execution: Id, valu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	append(&builder.data, u32(localid))
+	assert(localid != 0)
 	return builder.current_id^
 }
 
@@ -3997,10 +4607,13 @@ OpGroupIAdd :: proc(builder: ^Builder, result_type: Id, execution: Id, operation
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -4010,10 +4623,13 @@ OpGroupFAdd :: proc(builder: ^Builder, result_type: Id, execution: Id, operation
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -4023,10 +4639,13 @@ OpGroupFMin :: proc(builder: ^Builder, result_type: Id, execution: Id, operation
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -4036,10 +4655,13 @@ OpGroupUMin :: proc(builder: ^Builder, result_type: Id, execution: Id, operation
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -4049,10 +4671,13 @@ OpGroupSMin :: proc(builder: ^Builder, result_type: Id, execution: Id, operation
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -4062,10 +4687,13 @@ OpGroupFMax :: proc(builder: ^Builder, result_type: Id, execution: Id, operation
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -4075,10 +4703,13 @@ OpGroupUMax :: proc(builder: ^Builder, result_type: Id, execution: Id, operation
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -4088,10 +4719,13 @@ OpGroupSMax :: proc(builder: ^Builder, result_type: Id, execution: Id, operation
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -4101,11 +4735,16 @@ OpReadPipe :: proc(builder: ^Builder, result_type: Id, pipe: Id, pointer: Id, pa
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pipe))
+	assert(pipe != 0)
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 	return builder.current_id^
 }
 
@@ -4115,11 +4754,16 @@ OpWritePipe :: proc(builder: ^Builder, result_type: Id, pipe: Id, pointer: Id, p
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pipe))
+	assert(pipe != 0)
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 	return builder.current_id^
 }
 
@@ -4129,13 +4773,20 @@ OpReservedReadPipe :: proc(builder: ^Builder, result_type: Id, pipe: Id, reserve
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pipe))
+	assert(pipe != 0)
 	append(&builder.data, u32(reserve_id))
+	assert(reserve_id != 0)
 	append(&builder.data, u32(index))
+	assert(index != 0)
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 	return builder.current_id^
 }
 
@@ -4145,13 +4796,20 @@ OpReservedWritePipe :: proc(builder: ^Builder, result_type: Id, pipe: Id, reserv
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pipe))
+	assert(pipe != 0)
 	append(&builder.data, u32(reserve_id))
+	assert(reserve_id != 0)
 	append(&builder.data, u32(index))
+	assert(index != 0)
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 	return builder.current_id^
 }
 
@@ -4161,11 +4819,16 @@ OpReserveReadPipePackets :: proc(builder: ^Builder, result_type: Id, pipe: Id, n
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pipe))
+	assert(pipe != 0)
 	append(&builder.data, u32(num_packets))
+	assert(num_packets != 0)
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 	return builder.current_id^
 }
 
@@ -4175,11 +4838,16 @@ OpReserveWritePipePackets :: proc(builder: ^Builder, result_type: Id, pipe: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pipe))
+	assert(pipe != 0)
 	append(&builder.data, u32(num_packets))
+	assert(num_packets != 0)
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 	return builder.current_id^
 }
 
@@ -4189,9 +4857,13 @@ OpCommitReadPipe :: proc(builder: ^Builder, pipe: Id, reserve_id: Id, packet_siz
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(pipe))
+	assert(pipe != 0)
 	append(&builder.data, u32(reserve_id))
+	assert(reserve_id != 0)
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 }
 
 OpCommitWritePipe :: proc(builder: ^Builder, pipe: Id, reserve_id: Id, packet_size: Id, packet_alignment: Id) -> () {
@@ -4200,9 +4872,13 @@ OpCommitWritePipe :: proc(builder: ^Builder, pipe: Id, reserve_id: Id, packet_si
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(pipe))
+	assert(pipe != 0)
 	append(&builder.data, u32(reserve_id))
+	assert(reserve_id != 0)
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 }
 
 OpIsValidReserveId :: proc(builder: ^Builder, result_type: Id, reserve_id: Id) -> (result: Id) {
@@ -4211,8 +4887,10 @@ OpIsValidReserveId :: proc(builder: ^Builder, result_type: Id, reserve_id: Id) -
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(reserve_id))
+	assert(reserve_id != 0)
 	return builder.current_id^
 }
 
@@ -4222,10 +4900,14 @@ OpGetNumPipePackets :: proc(builder: ^Builder, result_type: Id, pipe: Id, packet
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pipe))
+	assert(pipe != 0)
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 	return builder.current_id^
 }
 
@@ -4235,10 +4917,14 @@ OpGetMaxPipePackets :: proc(builder: ^Builder, result_type: Id, pipe: Id, packet
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pipe))
+	assert(pipe != 0)
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 	return builder.current_id^
 }
 
@@ -4248,12 +4934,18 @@ OpGroupReserveReadPipePackets :: proc(builder: ^Builder, result_type: Id, execut
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(pipe))
+	assert(pipe != 0)
 	append(&builder.data, u32(num_packets))
+	assert(num_packets != 0)
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 	return builder.current_id^
 }
 
@@ -4263,12 +4955,18 @@ OpGroupReserveWritePipePackets :: proc(builder: ^Builder, result_type: Id, execu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(pipe))
+	assert(pipe != 0)
 	append(&builder.data, u32(num_packets))
+	assert(num_packets != 0)
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 	return builder.current_id^
 }
 
@@ -4278,10 +4976,15 @@ OpGroupCommitReadPipe :: proc(builder: ^Builder, execution: Id, pipe: Id, reserv
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(pipe))
+	assert(pipe != 0)
 	append(&builder.data, u32(reserve_id))
+	assert(reserve_id != 0)
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 }
 
 OpGroupCommitWritePipe :: proc(builder: ^Builder, execution: Id, pipe: Id, reserve_id: Id, packet_size: Id, packet_alignment: Id) -> () {
@@ -4290,10 +4993,15 @@ OpGroupCommitWritePipe :: proc(builder: ^Builder, execution: Id, pipe: Id, reser
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(pipe))
+	assert(pipe != 0)
 	append(&builder.data, u32(reserve_id))
+	assert(reserve_id != 0)
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 }
 
 OpEnqueueMarker :: proc(builder: ^Builder, result_type: Id, queue: Id, num_events: Id, wait_events: Id, ret_event: Id) -> (result: Id) {
@@ -4302,11 +5010,16 @@ OpEnqueueMarker :: proc(builder: ^Builder, result_type: Id, queue: Id, num_event
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(queue))
+	assert(queue != 0)
 	append(&builder.data, u32(num_events))
+	assert(num_events != 0)
 	append(&builder.data, u32(wait_events))
+	assert(wait_events != 0)
 	append(&builder.data, u32(ret_event))
+	assert(ret_event != 0)
 	return builder.current_id^
 }
 
@@ -4316,18 +5029,32 @@ OpEnqueueKernel :: proc(builder: ^Builder, result_type: Id, queue: Id, flags: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(queue))
+	assert(queue != 0)
 	append(&builder.data, u32(flags))
+	assert(flags != 0)
 	append(&builder.data, u32(nd_range))
+	assert(nd_range != 0)
 	append(&builder.data, u32(num_events))
+	assert(num_events != 0)
 	append(&builder.data, u32(wait_events))
+	assert(wait_events != 0)
 	append(&builder.data, u32(ret_event))
+	assert(ret_event != 0)
 	append(&builder.data, u32(invoke))
+	assert(invoke != 0)
 	append(&builder.data, u32(param))
+	assert(param != 0)
 	append(&builder.data, u32(param_size))
+	assert(param_size != 0)
 	append(&builder.data, u32(param_align))
-	for local_size in local_size do append(&builder.data, u32(local_size))
+	assert(param_align != 0)
+	for local_size in local_size {
+		append(&builder.data, u32(local_size))
+		assert(local_size != 0)
+	}
 	return builder.current_id^
 }
 
@@ -4337,12 +5064,18 @@ OpGetKernelNDrangeSubGroupCount :: proc(builder: ^Builder, result_type: Id, nd_r
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(nd_range))
+	assert(nd_range != 0)
 	append(&builder.data, u32(invoke))
+	assert(invoke != 0)
 	append(&builder.data, u32(param))
+	assert(param != 0)
 	append(&builder.data, u32(param_size))
+	assert(param_size != 0)
 	append(&builder.data, u32(param_align))
+	assert(param_align != 0)
 	return builder.current_id^
 }
 
@@ -4352,12 +5085,18 @@ OpGetKernelNDrangeMaxSubGroupSize :: proc(builder: ^Builder, result_type: Id, nd
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(nd_range))
+	assert(nd_range != 0)
 	append(&builder.data, u32(invoke))
+	assert(invoke != 0)
 	append(&builder.data, u32(param))
+	assert(param != 0)
 	append(&builder.data, u32(param_size))
+	assert(param_size != 0)
 	append(&builder.data, u32(param_align))
+	assert(param_align != 0)
 	return builder.current_id^
 }
 
@@ -4367,11 +5106,16 @@ OpGetKernelWorkGroupSize :: proc(builder: ^Builder, result_type: Id, invoke: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(invoke))
+	assert(invoke != 0)
 	append(&builder.data, u32(param))
+	assert(param != 0)
 	append(&builder.data, u32(param_size))
+	assert(param_size != 0)
 	append(&builder.data, u32(param_align))
+	assert(param_align != 0)
 	return builder.current_id^
 }
 
@@ -4381,11 +5125,16 @@ OpGetKernelPreferredWorkGroupSizeMultiple :: proc(builder: ^Builder, result_type
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(invoke))
+	assert(invoke != 0)
 	append(&builder.data, u32(param))
+	assert(param != 0)
 	append(&builder.data, u32(param_size))
+	assert(param_size != 0)
 	append(&builder.data, u32(param_align))
+	assert(param_align != 0)
 	return builder.current_id^
 }
 
@@ -4395,6 +5144,7 @@ OpRetainEvent :: proc(builder: ^Builder, event: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(event))
+	assert(event != 0)
 }
 
 OpReleaseEvent :: proc(builder: ^Builder, event: Id) -> () {
@@ -4403,6 +5153,7 @@ OpReleaseEvent :: proc(builder: ^Builder, event: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(event))
+	assert(event != 0)
 }
 
 OpCreateUserEvent :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
@@ -4411,6 +5162,7 @@ OpCreateUserEvent :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -4421,8 +5173,10 @@ OpIsValidEvent :: proc(builder: ^Builder, result_type: Id, event: Id) -> (result
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(event))
+	assert(event != 0)
 	return builder.current_id^
 }
 
@@ -4432,7 +5186,9 @@ OpSetUserEventStatus :: proc(builder: ^Builder, event: Id, status: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(event))
+	assert(event != 0)
 	append(&builder.data, u32(status))
+	assert(status != 0)
 }
 
 OpCaptureEventProfilingInfo :: proc(builder: ^Builder, event: Id, profiling_info: Id, value: Id) -> () {
@@ -4441,8 +5197,11 @@ OpCaptureEventProfilingInfo :: proc(builder: ^Builder, event: Id, profiling_info
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(event))
+	assert(event != 0)
 	append(&builder.data, u32(profiling_info))
+	assert(profiling_info != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 }
 
 OpGetDefaultQueue :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
@@ -4451,6 +5210,7 @@ OpGetDefaultQueue :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -4461,10 +5221,14 @@ OpBuildNDRange :: proc(builder: ^Builder, result_type: Id, globalworksize: Id, l
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(globalworksize))
+	assert(globalworksize != 0)
 	append(&builder.data, u32(localworksize))
+	assert(localworksize != 0)
 	append(&builder.data, u32(globalworkoffset))
+	assert(globalworkoffset != 0)
 	return builder.current_id^
 }
 
@@ -4474,10 +5238,15 @@ OpImageSparseSampleImplicitLod :: proc(builder: ^Builder, result_type: Id, sampl
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	assert(coordinate != 0)
+	if _operand_4, ok := _operand_4.?; ok {
+		append(&builder.data, transmute(u32)_operand_4)
+	}
 	return builder.current_id^
 }
 
@@ -4487,9 +5256,12 @@ OpImageSparseSampleExplicitLod :: proc(builder: ^Builder, result_type: Id, sampl
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, transmute(u32)_operand_4)
 	return builder.current_id^
 }
@@ -4500,11 +5272,17 @@ OpImageSparseSampleDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, s
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(d_ref_))
-	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	assert(d_ref_ != 0)
+	if _operand_5, ok := _operand_5.?; ok {
+		append(&builder.data, transmute(u32)_operand_5)
+	}
 	return builder.current_id^
 }
 
@@ -4514,10 +5292,14 @@ OpImageSparseSampleDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, s
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(d_ref_))
+	assert(d_ref_ != 0)
 	append(&builder.data, transmute(u32)_operand_5)
 	return builder.current_id^
 }
@@ -4528,10 +5310,15 @@ OpImageSparseSampleProjImplicitLod :: proc(builder: ^Builder, result_type: Id, s
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	assert(coordinate != 0)
+	if _operand_4, ok := _operand_4.?; ok {
+		append(&builder.data, transmute(u32)_operand_4)
+	}
 	return builder.current_id^
 }
 
@@ -4541,9 +5328,12 @@ OpImageSparseSampleProjExplicitLod :: proc(builder: ^Builder, result_type: Id, s
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, transmute(u32)_operand_4)
 	return builder.current_id^
 }
@@ -4554,11 +5344,17 @@ OpImageSparseSampleProjDrefImplicitLod :: proc(builder: ^Builder, result_type: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(d_ref_))
-	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	assert(d_ref_ != 0)
+	if _operand_5, ok := _operand_5.?; ok {
+		append(&builder.data, transmute(u32)_operand_5)
+	}
 	return builder.current_id^
 }
 
@@ -4568,10 +5364,14 @@ OpImageSparseSampleProjDrefExplicitLod :: proc(builder: ^Builder, result_type: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(d_ref_))
+	assert(d_ref_ != 0)
 	append(&builder.data, transmute(u32)_operand_5)
 	return builder.current_id^
 }
@@ -4582,10 +5382,15 @@ OpImageSparseFetch :: proc(builder: ^Builder, result_type: Id, image: Id, coordi
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	append(&builder.data, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	assert(coordinate != 0)
+	if _operand_4, ok := _operand_4.?; ok {
+		append(&builder.data, transmute(u32)_operand_4)
+	}
 	return builder.current_id^
 }
 
@@ -4595,11 +5400,17 @@ OpImageSparseGather :: proc(builder: ^Builder, result_type: Id, sampled_image: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(component))
-	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	assert(component != 0)
+	if _operand_5, ok := _operand_5.?; ok {
+		append(&builder.data, transmute(u32)_operand_5)
+	}
 	return builder.current_id^
 }
 
@@ -4609,11 +5420,17 @@ OpImageSparseDrefGather :: proc(builder: ^Builder, result_type: Id, sampled_imag
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(d_ref_))
-	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	assert(d_ref_ != 0)
+	if _operand_5, ok := _operand_5.?; ok {
+		append(&builder.data, transmute(u32)_operand_5)
+	}
 	return builder.current_id^
 }
 
@@ -4623,8 +5440,10 @@ OpImageSparseTexelsResident :: proc(builder: ^Builder, result_type: Id, resident
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(resident_code))
+	assert(resident_code != 0)
 	return builder.current_id^
 }
 
@@ -4641,10 +5460,14 @@ OpAtomicFlagTestAndSet :: proc(builder: ^Builder, result_type: Id, pointer: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	return builder.current_id^
 }
 
@@ -4654,8 +5477,11 @@ OpAtomicFlagClear :: proc(builder: ^Builder, pointer: Id, memory: Id, semantics:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 }
 
 OpImageSparseRead :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
@@ -4664,10 +5490,15 @@ OpImageSparseRead :: proc(builder: ^Builder, result_type: Id, image: Id, coordin
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	append(&builder.data, u32(coordinate))
-	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	assert(coordinate != 0)
+	if _operand_4, ok := _operand_4.?; ok {
+		append(&builder.data, transmute(u32)_operand_4)
+	}
 	return builder.current_id^
 }
 
@@ -4677,8 +5508,10 @@ OpSizeOf :: proc(builder: ^Builder, result_type: Id, pointer: Id) -> (result: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	return builder.current_id^
 }
 
@@ -4697,6 +5530,7 @@ OpConstantPipeStorage :: proc(builder: ^Builder, result_type: Id, packet_size: u
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(packet_size))
 	append(&builder.data, u32(packet_alignment))
@@ -4710,8 +5544,10 @@ OpCreatePipeFromPipeStorage :: proc(builder: ^Builder, result_type: Id, pipe_sto
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pipe_storage))
+	assert(pipe_storage != 0)
 	return builder.current_id^
 }
 
@@ -4721,12 +5557,18 @@ OpGetKernelLocalSizeForSubgroupCount :: proc(builder: ^Builder, result_type: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(subgroup_count))
+	assert(subgroup_count != 0)
 	append(&builder.data, u32(invoke))
+	assert(invoke != 0)
 	append(&builder.data, u32(param))
+	assert(param != 0)
 	append(&builder.data, u32(param_size))
+	assert(param_size != 0)
 	append(&builder.data, u32(param_align))
+	assert(param_align != 0)
 	return builder.current_id^
 }
 
@@ -4736,11 +5578,16 @@ OpGetKernelMaxNumSubgroups :: proc(builder: ^Builder, result_type: Id, invoke: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(invoke))
+	assert(invoke != 0)
 	append(&builder.data, u32(param))
+	assert(param != 0)
 	append(&builder.data, u32(param_size))
+	assert(param_size != 0)
 	append(&builder.data, u32(param_align))
+	assert(param_align != 0)
 	return builder.current_id^
 }
 
@@ -4759,8 +5606,10 @@ OpNamedBarrierInitialize :: proc(builder: ^Builder, result_type: Id, subgroup_co
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(subgroup_count))
+	assert(subgroup_count != 0)
 	return builder.current_id^
 }
 
@@ -4770,8 +5619,11 @@ OpMemoryNamedBarrier :: proc(builder: ^Builder, named_barrier: Id, memory: Id, s
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(named_barrier))
+	assert(named_barrier != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 }
 
 OpModuleProcessed :: proc(builder: ^Builder, process: string) -> () {
@@ -4788,6 +5640,7 @@ OpExecutionModeId :: proc(builder: ^Builder, entry_point: Id, mode: ExecutionMod
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(entry_point))
+	assert(entry_point != 0)
 	append(&builder.data, transmute(u32)mode)
 }
 
@@ -4797,6 +5650,7 @@ OpDecorateId :: proc(builder: ^Builder, target: Id, _operand_1: Decoration) -> (
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(target))
+	assert(target != 0)
 	append(&builder.data, transmute(u32)_operand_1)
 }
 
@@ -4806,8 +5660,10 @@ OpGroupNonUniformElect :: proc(builder: ^Builder, result_type: Id, execution: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	return builder.current_id^
 }
 
@@ -4817,9 +5673,12 @@ OpGroupNonUniformAll :: proc(builder: ^Builder, result_type: Id, execution: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(predicate))
+	assert(predicate != 0)
 	return builder.current_id^
 }
 
@@ -4829,9 +5688,12 @@ OpGroupNonUniformAny :: proc(builder: ^Builder, result_type: Id, execution: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(predicate))
+	assert(predicate != 0)
 	return builder.current_id^
 }
 
@@ -4841,9 +5703,12 @@ OpGroupNonUniformAllEqual :: proc(builder: ^Builder, result_type: Id, execution:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -4853,10 +5718,14 @@ OpGroupNonUniformBroadcast :: proc(builder: ^Builder, result_type: Id, execution
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	append(&builder.data, u32(invocation_id))
+	assert(invocation_id != 0)
 	return builder.current_id^
 }
 
@@ -4866,9 +5735,12 @@ OpGroupNonUniformBroadcastFirst :: proc(builder: ^Builder, result_type: Id, exec
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -4878,9 +5750,12 @@ OpGroupNonUniformBallot :: proc(builder: ^Builder, result_type: Id, execution: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(predicate))
+	assert(predicate != 0)
 	return builder.current_id^
 }
 
@@ -4890,9 +5765,12 @@ OpGroupNonUniformInverseBallot :: proc(builder: ^Builder, result_type: Id, execu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -4902,10 +5780,14 @@ OpGroupNonUniformBallotBitExtract :: proc(builder: ^Builder, result_type: Id, ex
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	append(&builder.data, u32(index))
+	assert(index != 0)
 	return builder.current_id^
 }
 
@@ -4915,10 +5797,13 @@ OpGroupNonUniformBallotBitCount :: proc(builder: ^Builder, result_type: Id, exec
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -4928,9 +5813,12 @@ OpGroupNonUniformBallotFindLSB :: proc(builder: ^Builder, result_type: Id, execu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -4940,9 +5828,12 @@ OpGroupNonUniformBallotFindMSB :: proc(builder: ^Builder, result_type: Id, execu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -4952,10 +5843,14 @@ OpGroupNonUniformShuffle :: proc(builder: ^Builder, result_type: Id, execution: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	append(&builder.data, u32(invocation_id))
+	assert(invocation_id != 0)
 	return builder.current_id^
 }
 
@@ -4965,10 +5860,14 @@ OpGroupNonUniformShuffleXor :: proc(builder: ^Builder, result_type: Id, executio
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	append(&builder.data, u32(mask))
+	assert(mask != 0)
 	return builder.current_id^
 }
 
@@ -4978,10 +5877,14 @@ OpGroupNonUniformShuffleUp :: proc(builder: ^Builder, result_type: Id, execution
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	append(&builder.data, u32(delta))
+	assert(delta != 0)
 	return builder.current_id^
 }
 
@@ -4991,10 +5894,14 @@ OpGroupNonUniformShuffleDown :: proc(builder: ^Builder, result_type: Id, executi
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	append(&builder.data, u32(delta))
+	assert(delta != 0)
 	return builder.current_id^
 }
 
@@ -5004,11 +5911,17 @@ OpGroupNonUniformIAdd :: proc(builder: ^Builder, result_type: Id, execution: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5018,11 +5931,17 @@ OpGroupNonUniformFAdd :: proc(builder: ^Builder, result_type: Id, execution: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5032,11 +5951,17 @@ OpGroupNonUniformIMul :: proc(builder: ^Builder, result_type: Id, execution: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5046,11 +5971,17 @@ OpGroupNonUniformFMul :: proc(builder: ^Builder, result_type: Id, execution: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5060,11 +5991,17 @@ OpGroupNonUniformSMin :: proc(builder: ^Builder, result_type: Id, execution: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5074,11 +6011,17 @@ OpGroupNonUniformUMin :: proc(builder: ^Builder, result_type: Id, execution: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5088,11 +6031,17 @@ OpGroupNonUniformFMin :: proc(builder: ^Builder, result_type: Id, execution: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5102,11 +6051,17 @@ OpGroupNonUniformSMax :: proc(builder: ^Builder, result_type: Id, execution: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5116,11 +6071,17 @@ OpGroupNonUniformUMax :: proc(builder: ^Builder, result_type: Id, execution: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5130,11 +6091,17 @@ OpGroupNonUniformFMax :: proc(builder: ^Builder, result_type: Id, execution: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5144,11 +6111,17 @@ OpGroupNonUniformBitwiseAnd :: proc(builder: ^Builder, result_type: Id, executio
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5158,11 +6131,17 @@ OpGroupNonUniformBitwiseOr :: proc(builder: ^Builder, result_type: Id, execution
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5172,11 +6151,17 @@ OpGroupNonUniformBitwiseXor :: proc(builder: ^Builder, result_type: Id, executio
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5186,11 +6171,17 @@ OpGroupNonUniformLogicalAnd :: proc(builder: ^Builder, result_type: Id, executio
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5200,11 +6191,17 @@ OpGroupNonUniformLogicalOr :: proc(builder: ^Builder, result_type: Id, execution
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5214,11 +6211,17 @@ OpGroupNonUniformLogicalXor :: proc(builder: ^Builder, result_type: Id, executio
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(value))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(value != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5228,10 +6231,14 @@ OpGroupNonUniformQuadBroadcast :: proc(builder: ^Builder, result_type: Id, execu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	append(&builder.data, u32(index))
+	assert(index != 0)
 	return builder.current_id^
 }
 
@@ -5241,10 +6248,14 @@ OpGroupNonUniformQuadSwap :: proc(builder: ^Builder, result_type: Id, execution:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	append(&builder.data, u32(direction))
+	assert(direction != 0)
 	return builder.current_id^
 }
 
@@ -5254,8 +6265,10 @@ OpCopyLogical :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (resul
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -5265,9 +6278,12 @@ OpPtrEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -5277,9 +6293,12 @@ OpPtrNotEqual :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -5289,9 +6308,12 @@ OpPtrDiff :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operand_2: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -5301,9 +6323,14 @@ OpColorAttachmentReadEXT :: proc(builder: ^Builder, result_type: Id, attachment:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(attachment))
-	if sample, ok := sample.?; ok do append(&builder.data, u32(sample))
+	assert(attachment != 0)
+	if sample, ok := sample.?; ok {
+		append(&builder.data, u32(sample))
+		assert(sample != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5313,8 +6340,12 @@ OpDepthAttachmentReadEXT :: proc(builder: ^Builder, result_type: Id, sample: May
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
-	if sample, ok := sample.?; ok do append(&builder.data, u32(sample))
+	if sample, ok := sample.?; ok {
+		append(&builder.data, u32(sample))
+		assert(sample != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5324,8 +6355,12 @@ OpStencilAttachmentReadEXT :: proc(builder: ^Builder, result_type: Id, sample: M
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
-	if sample, ok := sample.?; ok do append(&builder.data, u32(sample))
+	if sample, ok := sample.?; ok {
+		append(&builder.data, u32(sample))
+		assert(sample != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5336,8 +6371,15 @@ OpTypeTensorARM :: proc(builder: ^Builder, element_type: Id, rank: Maybe(Id) = n
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(element_type))
-	if rank, ok := rank.?; ok do append(&builder.data, u32(rank))
-	if shape, ok := shape.?; ok do append(&builder.data, u32(shape))
+	assert(element_type != 0)
+	if rank, ok := rank.?; ok {
+		append(&builder.data, u32(rank))
+		assert(rank != 0)
+	}
+	if shape, ok := shape.?; ok {
+		append(&builder.data, u32(shape))
+		assert(shape != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5347,10 +6389,15 @@ OpTensorReadARM :: proc(builder: ^Builder, result_type: Id, tensor: Id, coordina
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(tensor))
+	assert(tensor != 0)
 	append(&builder.data, u32(coordinates))
-	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	assert(coordinates != 0)
+	if _operand_4, ok := _operand_4.?; ok {
+		append(&builder.data, transmute(u32)_operand_4)
+	}
 	return builder.current_id^
 }
 
@@ -5360,9 +6407,14 @@ OpTensorWriteARM :: proc(builder: ^Builder, tensor: Id, coordinates: Id, object:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(tensor))
+	assert(tensor != 0)
 	append(&builder.data, u32(coordinates))
+	assert(coordinates != 0)
 	append(&builder.data, u32(object))
-	if _operand_3, ok := _operand_3.?; ok do append(&builder.data, transmute(u32)_operand_3)
+	assert(object != 0)
+	if _operand_3, ok := _operand_3.?; ok {
+		append(&builder.data, transmute(u32)_operand_3)
+	}
 }
 
 OpTensorQuerySizeARM :: proc(builder: ^Builder, result_type: Id, tensor: Id, dimension: Id) -> (result: Id) {
@@ -5371,9 +6423,12 @@ OpTensorQuerySizeARM :: proc(builder: ^Builder, result_type: Id, tensor: Id, dim
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(tensor))
+	assert(tensor != 0)
 	append(&builder.data, u32(dimension))
+	assert(dimension != 0)
 	return builder.current_id^
 }
 
@@ -5383,6 +6438,7 @@ OpGraphConstantARM :: proc(builder: ^Builder, result_type: Id, graphconstantid: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(graphconstantid))
 	return builder.current_id^
@@ -5394,8 +6450,12 @@ OpGraphEntryPointARM :: proc(builder: ^Builder, graph: Id, name: string, interfa
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(graph))
+	assert(graph != 0)
 	write_string(&builder.data, name)
-	for interface in interface do append(&builder.data, u32(interface))
+	for interface in interface {
+		append(&builder.data, u32(interface))
+		assert(interface != 0)
+	}
 }
 
 OpGraphARM :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
@@ -5404,6 +6464,7 @@ OpGraphARM :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -5414,9 +6475,14 @@ OpGraphInputARM :: proc(builder: ^Builder, result_type: Id, inputindex: Id, elem
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(inputindex))
-	for elementindex in elementindex do append(&builder.data, u32(elementindex))
+	assert(inputindex != 0)
+	for elementindex in elementindex {
+		append(&builder.data, u32(elementindex))
+		assert(elementindex != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5426,8 +6492,13 @@ OpGraphSetOutputARM :: proc(builder: ^Builder, value: Id, outputindex: Id, eleme
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	append(&builder.data, u32(outputindex))
-	for elementindex in elementindex do append(&builder.data, u32(elementindex))
+	assert(outputindex != 0)
+	for elementindex in elementindex {
+		append(&builder.data, u32(elementindex))
+		assert(elementindex != 0)
+	}
 }
 
 OpGraphEndARM :: proc(builder: ^Builder) -> () {
@@ -5444,7 +6515,10 @@ OpTypeGraphARM :: proc(builder: ^Builder, numinputs: u32, inouttypes: ..Id) -> (
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(numinputs))
-	for inouttypes in inouttypes do append(&builder.data, u32(inouttypes))
+	for inouttypes in inouttypes {
+		append(&builder.data, u32(inouttypes))
+		assert(inouttypes != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5471,10 +6545,17 @@ OpUntypedVariableKHR :: proc(builder: ^Builder, result_type: Id, _operand_2: Sto
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, transmute(u32)_operand_2)
-	if data_type, ok := data_type.?; ok do append(&builder.data, u32(data_type))
-	if initializer, ok := initializer.?; ok do append(&builder.data, u32(initializer))
+	if data_type, ok := data_type.?; ok {
+		append(&builder.data, u32(data_type))
+		assert(data_type != 0)
+	}
+	if initializer, ok := initializer.?; ok {
+		append(&builder.data, u32(initializer))
+		assert(initializer != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5484,10 +6565,16 @@ OpUntypedAccessChainKHR :: proc(builder: ^Builder, result_type: Id, base_type: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base_type))
+	assert(base_type != 0)
 	append(&builder.data, u32(base))
-	for indexes in indexes do append(&builder.data, u32(indexes))
+	assert(base != 0)
+	for indexes in indexes {
+		append(&builder.data, u32(indexes))
+		assert(indexes != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5497,10 +6584,16 @@ OpUntypedInBoundsAccessChainKHR :: proc(builder: ^Builder, result_type: Id, base
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base_type))
+	assert(base_type != 0)
 	append(&builder.data, u32(base))
-	for indexes in indexes do append(&builder.data, u32(indexes))
+	assert(base != 0)
+	for indexes in indexes {
+		append(&builder.data, u32(indexes))
+		assert(indexes != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5510,8 +6603,10 @@ OpSubgroupBallotKHR :: proc(builder: ^Builder, result_type: Id, predicate: Id) -
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(predicate))
+	assert(predicate != 0)
 	return builder.current_id^
 }
 
@@ -5521,8 +6616,10 @@ OpSubgroupFirstInvocationKHR :: proc(builder: ^Builder, result_type: Id, value: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -5532,11 +6629,18 @@ OpUntypedPtrAccessChainKHR :: proc(builder: ^Builder, result_type: Id, base_type
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base_type))
+	assert(base_type != 0)
 	append(&builder.data, u32(base))
+	assert(base != 0)
 	append(&builder.data, u32(element))
-	for indexes in indexes do append(&builder.data, u32(indexes))
+	assert(element != 0)
+	for indexes in indexes {
+		append(&builder.data, u32(indexes))
+		assert(indexes != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5546,11 +6650,18 @@ OpUntypedInBoundsPtrAccessChainKHR :: proc(builder: ^Builder, result_type: Id, b
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base_type))
+	assert(base_type != 0)
 	append(&builder.data, u32(base))
+	assert(base != 0)
 	append(&builder.data, u32(element))
-	for indexes in indexes do append(&builder.data, u32(indexes))
+	assert(element != 0)
+	for indexes in indexes {
+		append(&builder.data, u32(indexes))
+		assert(indexes != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5560,9 +6671,12 @@ OpUntypedArrayLengthKHR :: proc(builder: ^Builder, result_type: Id, structure: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(structure))
+	assert(structure != 0)
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(array_member))
 	return builder.current_id^
 }
@@ -5573,10 +6687,21 @@ OpUntypedPrefetchKHR :: proc(builder: ^Builder, pointer_type: Id, num_bytes: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(pointer_type))
+	assert(pointer_type != 0)
 	append(&builder.data, u32(num_bytes))
-	if rw, ok := rw.?; ok do append(&builder.data, u32(rw))
-	if locality, ok := locality.?; ok do append(&builder.data, u32(locality))
-	if cache_type, ok := cache_type.?; ok do append(&builder.data, u32(cache_type))
+	assert(num_bytes != 0)
+	if rw, ok := rw.?; ok {
+		append(&builder.data, u32(rw))
+		assert(rw != 0)
+	}
+	if locality, ok := locality.?; ok {
+		append(&builder.data, u32(locality))
+		assert(locality != 0)
+	}
+	if cache_type, ok := cache_type.?; ok {
+		append(&builder.data, u32(cache_type))
+		assert(cache_type != 0)
+	}
 }
 
 OpSubgroupAllKHR :: proc(builder: ^Builder, result_type: Id, predicate: Id) -> (result: Id) {
@@ -5585,8 +6710,10 @@ OpSubgroupAllKHR :: proc(builder: ^Builder, result_type: Id, predicate: Id) -> (
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(predicate))
+	assert(predicate != 0)
 	return builder.current_id^
 }
 
@@ -5596,8 +6723,10 @@ OpSubgroupAnyKHR :: proc(builder: ^Builder, result_type: Id, predicate: Id) -> (
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(predicate))
+	assert(predicate != 0)
 	return builder.current_id^
 }
 
@@ -5607,8 +6736,10 @@ OpSubgroupAllEqualKHR :: proc(builder: ^Builder, result_type: Id, predicate: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(predicate))
+	assert(predicate != 0)
 	return builder.current_id^
 }
 
@@ -5618,11 +6749,18 @@ OpGroupNonUniformRotateKHR :: proc(builder: ^Builder, result_type: Id, execution
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	append(&builder.data, u32(delta))
-	if clustersize, ok := clustersize.?; ok do append(&builder.data, u32(clustersize))
+	assert(delta != 0)
+	if clustersize, ok := clustersize.?; ok {
+		append(&builder.data, u32(clustersize))
+		assert(clustersize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5632,9 +6770,12 @@ OpSubgroupReadInvocationKHR :: proc(builder: ^Builder, result_type: Id, value: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	append(&builder.data, u32(index))
+	assert(index != 0)
 	return builder.current_id^
 }
 
@@ -5644,10 +6785,15 @@ OpExtInstWithForwardRefsKHR :: proc(builder: ^Builder, result_type: Id, set: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(set))
+	assert(set != 0)
 	append(&builder.data, u32(instruction))
-	for _operand_4 in _operand_4 do append(&builder.data, u32(_operand_4))
+	for _operand_4 in _operand_4 {
+		append(&builder.data, u32(_operand_4))
+		assert(_operand_4 != 0)
+	}
 	return builder.current_id^
 }
 
@@ -5657,16 +6803,28 @@ OpUntypedGroupAsyncCopyKHR :: proc(builder: ^Builder, result_type: Id, execution
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(destination))
+	assert(destination != 0)
 	append(&builder.data, u32(source))
+	assert(source != 0)
 	append(&builder.data, u32(element_num_bytes))
+	assert(element_num_bytes != 0)
 	append(&builder.data, u32(num_elements))
+	assert(num_elements != 0)
 	append(&builder.data, u32(stride))
+	assert(stride != 0)
 	append(&builder.data, u32(event))
-	if destination_memory_operands, ok := destination_memory_operands.?; ok do append(&builder.data, transmute(u32)destination_memory_operands)
-	if source_memory_operands, ok := source_memory_operands.?; ok do append(&builder.data, transmute(u32)source_memory_operands)
+	assert(event != 0)
+	if destination_memory_operands, ok := destination_memory_operands.?; ok {
+		append(&builder.data, transmute(u32)destination_memory_operands)
+	}
+	if source_memory_operands, ok := source_memory_operands.?; ok {
+		append(&builder.data, transmute(u32)source_memory_operands)
+	}
 	return builder.current_id^
 }
 
@@ -5676,16 +6834,27 @@ OpTraceRayKHR :: proc(builder: ^Builder, accel: Id, ray_flags: Id, cull_mask: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(accel))
+	assert(accel != 0)
 	append(&builder.data, u32(ray_flags))
+	assert(ray_flags != 0)
 	append(&builder.data, u32(cull_mask))
+	assert(cull_mask != 0)
 	append(&builder.data, u32(sbt_offset))
+	assert(sbt_offset != 0)
 	append(&builder.data, u32(sbt_stride))
+	assert(sbt_stride != 0)
 	append(&builder.data, u32(miss_index))
+	assert(miss_index != 0)
 	append(&builder.data, u32(ray_origin))
+	assert(ray_origin != 0)
 	append(&builder.data, u32(ray_tmin))
+	assert(ray_tmin != 0)
 	append(&builder.data, u32(ray_direction))
+	assert(ray_direction != 0)
 	append(&builder.data, u32(ray_tmax))
+	assert(ray_tmax != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 }
 
 OpExecuteCallableKHR :: proc(builder: ^Builder, sbt_index: Id, callable_data: Id) -> () {
@@ -5694,7 +6863,9 @@ OpExecuteCallableKHR :: proc(builder: ^Builder, sbt_index: Id, callable_data: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(sbt_index))
+	assert(sbt_index != 0)
 	append(&builder.data, u32(callable_data))
+	assert(callable_data != 0)
 }
 
 OpConvertUToAccelerationStructureKHR :: proc(builder: ^Builder, result_type: Id, accel: Id) -> (result: Id) {
@@ -5703,8 +6874,10 @@ OpConvertUToAccelerationStructureKHR :: proc(builder: ^Builder, result_type: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(accel))
+	assert(accel != 0)
 	return builder.current_id^
 }
 
@@ -5728,10 +6901,15 @@ OpSDot :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2: Id, p
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(vector_1))
+	assert(vector_1 != 0)
 	append(&builder.data, u32(vector_2))
-	if packed_vector_format, ok := packed_vector_format.?; ok do append(&builder.data, transmute(u32)packed_vector_format)
+	assert(vector_2 != 0)
+	if packed_vector_format, ok := packed_vector_format.?; ok {
+		append(&builder.data, transmute(u32)packed_vector_format)
+	}
 	return builder.current_id^
 }
 
@@ -5741,10 +6919,15 @@ OpUDot :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2: Id, p
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(vector_1))
+	assert(vector_1 != 0)
 	append(&builder.data, u32(vector_2))
-	if packed_vector_format, ok := packed_vector_format.?; ok do append(&builder.data, transmute(u32)packed_vector_format)
+	assert(vector_2 != 0)
+	if packed_vector_format, ok := packed_vector_format.?; ok {
+		append(&builder.data, transmute(u32)packed_vector_format)
+	}
 	return builder.current_id^
 }
 
@@ -5754,10 +6937,15 @@ OpSUDot :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(vector_1))
+	assert(vector_1 != 0)
 	append(&builder.data, u32(vector_2))
-	if packed_vector_format, ok := packed_vector_format.?; ok do append(&builder.data, transmute(u32)packed_vector_format)
+	assert(vector_2 != 0)
+	if packed_vector_format, ok := packed_vector_format.?; ok {
+		append(&builder.data, transmute(u32)packed_vector_format)
+	}
 	return builder.current_id^
 }
 
@@ -5767,11 +6955,17 @@ OpSDotAccSat :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(vector_1))
+	assert(vector_1 != 0)
 	append(&builder.data, u32(vector_2))
+	assert(vector_2 != 0)
 	append(&builder.data, u32(accumulator))
-	if packed_vector_format, ok := packed_vector_format.?; ok do append(&builder.data, transmute(u32)packed_vector_format)
+	assert(accumulator != 0)
+	if packed_vector_format, ok := packed_vector_format.?; ok {
+		append(&builder.data, transmute(u32)packed_vector_format)
+	}
 	return builder.current_id^
 }
 
@@ -5781,11 +6975,17 @@ OpUDotAccSat :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(vector_1))
+	assert(vector_1 != 0)
 	append(&builder.data, u32(vector_2))
+	assert(vector_2 != 0)
 	append(&builder.data, u32(accumulator))
-	if packed_vector_format, ok := packed_vector_format.?; ok do append(&builder.data, transmute(u32)packed_vector_format)
+	assert(accumulator != 0)
+	if packed_vector_format, ok := packed_vector_format.?; ok {
+		append(&builder.data, transmute(u32)packed_vector_format)
+	}
 	return builder.current_id^
 }
 
@@ -5795,11 +6995,17 @@ OpSUDotAccSat :: proc(builder: ^Builder, result_type: Id, vector_1: Id, vector_2
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(vector_1))
+	assert(vector_1 != 0)
 	append(&builder.data, u32(vector_2))
+	assert(vector_2 != 0)
 	append(&builder.data, u32(accumulator))
-	if packed_vector_format, ok := packed_vector_format.?; ok do append(&builder.data, transmute(u32)packed_vector_format)
+	assert(accumulator != 0)
+	if packed_vector_format, ok := packed_vector_format.?; ok {
+		append(&builder.data, transmute(u32)packed_vector_format)
+	}
 	return builder.current_id^
 }
 
@@ -5810,10 +7016,15 @@ OpTypeCooperativeMatrixKHR :: proc(builder: ^Builder, component_type: Id, scope:
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(component_type))
+	assert(component_type != 0)
 	append(&builder.data, u32(scope))
+	assert(scope != 0)
 	append(&builder.data, u32(rows))
+	assert(rows != 0)
 	append(&builder.data, u32(columns))
+	assert(columns != 0)
 	append(&builder.data, u32(use))
+	assert(use != 0)
 	return builder.current_id^
 }
 
@@ -5823,11 +7034,19 @@ OpCooperativeMatrixLoadKHR :: proc(builder: ^Builder, result_type: Id, pointer: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memorylayout))
-	if stride, ok := stride.?; ok do append(&builder.data, u32(stride))
-	if memory_operand, ok := memory_operand.?; ok do append(&builder.data, transmute(u32)memory_operand)
+	assert(memorylayout != 0)
+	if stride, ok := stride.?; ok {
+		append(&builder.data, u32(stride))
+		assert(stride != 0)
+	}
+	if memory_operand, ok := memory_operand.?; ok {
+		append(&builder.data, transmute(u32)memory_operand)
+	}
 	return builder.current_id^
 }
 
@@ -5837,10 +7056,18 @@ OpCooperativeMatrixStoreKHR :: proc(builder: ^Builder, pointer: Id, object: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(object))
+	assert(object != 0)
 	append(&builder.data, u32(memorylayout))
-	if stride, ok := stride.?; ok do append(&builder.data, u32(stride))
-	if memory_operand, ok := memory_operand.?; ok do append(&builder.data, transmute(u32)memory_operand)
+	assert(memorylayout != 0)
+	if stride, ok := stride.?; ok {
+		append(&builder.data, u32(stride))
+		assert(stride != 0)
+	}
+	if memory_operand, ok := memory_operand.?; ok {
+		append(&builder.data, transmute(u32)memory_operand)
+	}
 }
 
 OpCooperativeMatrixMulAddKHR :: proc(builder: ^Builder, result_type: Id, a: Id, b: Id, c: Id, cooperative_matrix_operands: Maybe(CooperativeMatrixOperands) = nil) -> (result: Id) {
@@ -5849,11 +7076,17 @@ OpCooperativeMatrixMulAddKHR :: proc(builder: ^Builder, result_type: Id, a: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(c))
-	if cooperative_matrix_operands, ok := cooperative_matrix_operands.?; ok do append(&builder.data, transmute(u32)cooperative_matrix_operands)
+	assert(c != 0)
+	if cooperative_matrix_operands, ok := cooperative_matrix_operands.?; ok {
+		append(&builder.data, transmute(u32)cooperative_matrix_operands)
+	}
 	return builder.current_id^
 }
 
@@ -5863,8 +7096,10 @@ OpCooperativeMatrixLengthKHR :: proc(builder: ^Builder, result_type: Id, type: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(type))
+	assert(type != 0)
 	return builder.current_id^
 }
 
@@ -5874,8 +7109,10 @@ OpConstantCompositeReplicateEXT :: proc(builder: ^Builder, result_type: Id, valu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -5885,8 +7122,10 @@ OpSpecConstantCompositeReplicateEXT :: proc(builder: ^Builder, result_type: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -5896,8 +7135,10 @@ OpCompositeConstructReplicateEXT :: proc(builder: ^Builder, result_type: Id, val
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -5916,13 +7157,21 @@ OpRayQueryInitializeKHR :: proc(builder: ^Builder, rayquery: Id, accel: Id, rayf
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(accel))
+	assert(accel != 0)
 	append(&builder.data, u32(rayflags))
+	assert(rayflags != 0)
 	append(&builder.data, u32(cullmask))
+	assert(cullmask != 0)
 	append(&builder.data, u32(rayorigin))
+	assert(rayorigin != 0)
 	append(&builder.data, u32(raytmin))
+	assert(raytmin != 0)
 	append(&builder.data, u32(raydirection))
+	assert(raydirection != 0)
 	append(&builder.data, u32(raytmax))
+	assert(raytmax != 0)
 }
 
 OpRayQueryTerminateKHR :: proc(builder: ^Builder, rayquery: Id) -> () {
@@ -5931,6 +7180,7 @@ OpRayQueryTerminateKHR :: proc(builder: ^Builder, rayquery: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 }
 
 OpRayQueryGenerateIntersectionKHR :: proc(builder: ^Builder, rayquery: Id, hitt: Id) -> () {
@@ -5939,7 +7189,9 @@ OpRayQueryGenerateIntersectionKHR :: proc(builder: ^Builder, rayquery: Id, hitt:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(hitt))
+	assert(hitt != 0)
 }
 
 OpRayQueryConfirmIntersectionKHR :: proc(builder: ^Builder, rayquery: Id) -> () {
@@ -5948,6 +7200,7 @@ OpRayQueryConfirmIntersectionKHR :: proc(builder: ^Builder, rayquery: Id) -> () 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 }
 
 OpRayQueryProceedKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id) -> (result: Id) {
@@ -5956,8 +7209,10 @@ OpRayQueryProceedKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id) -
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	return builder.current_id^
 }
 
@@ -5967,9 +7222,12 @@ OpRayQueryGetIntersectionTypeKHR :: proc(builder: ^Builder, result_type: Id, ray
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -5979,10 +7237,14 @@ OpImageSampleWeightedQCOM :: proc(builder: ^Builder, result_type: Id, texture: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(texture))
+	assert(texture != 0)
 	append(&builder.data, u32(coordinates))
+	assert(coordinates != 0)
 	append(&builder.data, u32(weights))
+	assert(weights != 0)
 	return builder.current_id^
 }
 
@@ -5992,10 +7254,14 @@ OpImageBoxFilterQCOM :: proc(builder: ^Builder, result_type: Id, texture: Id, co
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(texture))
+	assert(texture != 0)
 	append(&builder.data, u32(coordinates))
+	assert(coordinates != 0)
 	append(&builder.data, u32(box_size))
+	assert(box_size != 0)
 	return builder.current_id^
 }
 
@@ -6005,12 +7271,18 @@ OpImageBlockMatchSSDQCOM :: proc(builder: ^Builder, result_type: Id, target: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(target))
+	assert(target != 0)
 	append(&builder.data, u32(target_coordinates))
+	assert(target_coordinates != 0)
 	append(&builder.data, u32(reference))
+	assert(reference != 0)
 	append(&builder.data, u32(reference_coordinates))
+	assert(reference_coordinates != 0)
 	append(&builder.data, u32(block_size))
+	assert(block_size != 0)
 	return builder.current_id^
 }
 
@@ -6020,12 +7292,18 @@ OpImageBlockMatchSADQCOM :: proc(builder: ^Builder, result_type: Id, target: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(target))
+	assert(target != 0)
 	append(&builder.data, u32(target_coordinates))
+	assert(target_coordinates != 0)
 	append(&builder.data, u32(reference))
+	assert(reference != 0)
 	append(&builder.data, u32(reference_coordinates))
+	assert(reference_coordinates != 0)
 	append(&builder.data, u32(block_size))
+	assert(block_size != 0)
 	return builder.current_id^
 }
 
@@ -6035,8 +7313,10 @@ OpBitCastArrayQCOM :: proc(builder: ^Builder, result_type: Id, source_array: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(source_array))
+	assert(source_array != 0)
 	return builder.current_id^
 }
 
@@ -6046,12 +7326,18 @@ OpImageBlockMatchWindowSSDQCOM :: proc(builder: ^Builder, result_type: Id, targe
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(target_sampled_image))
+	assert(target_sampled_image != 0)
 	append(&builder.data, u32(target_coordinates))
+	assert(target_coordinates != 0)
 	append(&builder.data, u32(reference_sampled_image))
+	assert(reference_sampled_image != 0)
 	append(&builder.data, u32(reference_coordinates))
+	assert(reference_coordinates != 0)
 	append(&builder.data, u32(block_size))
+	assert(block_size != 0)
 	return builder.current_id^
 }
 
@@ -6061,12 +7347,18 @@ OpImageBlockMatchWindowSADQCOM :: proc(builder: ^Builder, result_type: Id, targe
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(target_sampled_image))
+	assert(target_sampled_image != 0)
 	append(&builder.data, u32(target_coordinates))
+	assert(target_coordinates != 0)
 	append(&builder.data, u32(reference_sampled_image))
+	assert(reference_sampled_image != 0)
 	append(&builder.data, u32(reference_coordinates))
+	assert(reference_coordinates != 0)
 	append(&builder.data, u32(block_size))
+	assert(block_size != 0)
 	return builder.current_id^
 }
 
@@ -6076,12 +7368,18 @@ OpImageBlockMatchGatherSSDQCOM :: proc(builder: ^Builder, result_type: Id, targe
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(target_sampled_image))
+	assert(target_sampled_image != 0)
 	append(&builder.data, u32(target_coordinates))
+	assert(target_coordinates != 0)
 	append(&builder.data, u32(reference_sampled_image))
+	assert(reference_sampled_image != 0)
 	append(&builder.data, u32(reference_coordinates))
+	assert(reference_coordinates != 0)
 	append(&builder.data, u32(block_size))
+	assert(block_size != 0)
 	return builder.current_id^
 }
 
@@ -6091,12 +7389,18 @@ OpImageBlockMatchGatherSADQCOM :: proc(builder: ^Builder, result_type: Id, targe
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(target_sampled_image))
+	assert(target_sampled_image != 0)
 	append(&builder.data, u32(target_coordinates))
+	assert(target_coordinates != 0)
 	append(&builder.data, u32(reference_sampled_image))
+	assert(reference_sampled_image != 0)
 	append(&builder.data, u32(reference_coordinates))
+	assert(reference_coordinates != 0)
 	append(&builder.data, u32(block_size))
+	assert(block_size != 0)
 	return builder.current_id^
 }
 
@@ -6106,8 +7410,10 @@ OpCompositeConstructCoopMatQCOM :: proc(builder: ^Builder, result_type: Id, sour
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(source_array))
+	assert(source_array != 0)
 	return builder.current_id^
 }
 
@@ -6117,8 +7423,10 @@ OpCompositeExtractCoopMatQCOM :: proc(builder: ^Builder, result_type: Id, source
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(source_cooperative_matrix))
+	assert(source_cooperative_matrix != 0)
 	return builder.current_id^
 }
 
@@ -6128,9 +7436,12 @@ OpExtractSubArrayQCOM :: proc(builder: ^Builder, result_type: Id, source_array: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(source_array))
+	assert(source_array != 0)
 	append(&builder.data, u32(index))
+	assert(index != 0)
 	return builder.current_id^
 }
 
@@ -6140,10 +7451,13 @@ OpGroupIAddNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -6153,10 +7467,13 @@ OpGroupFAddNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -6166,10 +7483,13 @@ OpGroupFMinNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -6179,10 +7499,13 @@ OpGroupUMinNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -6192,10 +7515,13 @@ OpGroupSMinNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -6205,10 +7531,13 @@ OpGroupFMaxNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -6218,10 +7547,13 @@ OpGroupUMaxNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -6231,10 +7563,13 @@ OpGroupSMaxNonUniformAMD :: proc(builder: ^Builder, result_type: Id, execution: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -6244,9 +7579,12 @@ OpFragmentMaskFetchAMD :: proc(builder: ^Builder, result_type: Id, image: Id, co
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	return builder.current_id^
 }
 
@@ -6256,10 +7594,14 @@ OpFragmentFetchAMD :: proc(builder: ^Builder, result_type: Id, image: Id, coordi
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(fragment_index))
+	assert(fragment_index != 0)
 	return builder.current_id^
 }
 
@@ -6269,8 +7611,10 @@ OpReadClockKHR :: proc(builder: ^Builder, result_type: Id, scope: Id) -> (result
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(scope))
+	assert(scope != 0)
 	return builder.current_id^
 }
 
@@ -6280,10 +7624,14 @@ OpAllocateNodePayloadsAMDX :: proc(builder: ^Builder, result_type: Id, visibilit
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(visibility))
+	assert(visibility != 0)
 	append(&builder.data, u32(payload_count))
+	assert(payload_count != 0)
 	append(&builder.data, u32(node_index))
+	assert(node_index != 0)
 	return builder.current_id^
 }
 
@@ -6293,6 +7641,7 @@ OpEnqueueNodePayloadsAMDX :: proc(builder: ^Builder, payload_array: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(payload_array))
+	assert(payload_array != 0)
 }
 
 OpTypeNodePayloadArrayAMDX :: proc(builder: ^Builder, payload_type: Id) -> (result: Id) {
@@ -6302,6 +7651,7 @@ OpTypeNodePayloadArrayAMDX :: proc(builder: ^Builder, payload_type: Id) -> (resu
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload_type))
+	assert(payload_type != 0)
 	return builder.current_id^
 }
 
@@ -6311,8 +7661,10 @@ OpFinishWritingNodePayloadAMDX :: proc(builder: ^Builder, result_type: Id, paylo
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -6322,8 +7674,10 @@ OpNodePayloadArrayLengthAMDX :: proc(builder: ^Builder, result_type: Id, payload
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload_array))
+	assert(payload_array != 0)
 	return builder.current_id^
 }
 
@@ -6333,9 +7687,12 @@ OpIsNodePayloadValidAMDX :: proc(builder: ^Builder, result_type: Id, payload_typ
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload_type))
+	assert(payload_type != 0)
 	append(&builder.data, u32(node_index))
+	assert(node_index != 0)
 	return builder.current_id^
 }
 
@@ -6365,8 +7722,10 @@ OpGroupNonUniformQuadAllKHR :: proc(builder: ^Builder, result_type: Id, predicat
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(predicate))
+	assert(predicate != 0)
 	return builder.current_id^
 }
 
@@ -6376,8 +7735,10 @@ OpGroupNonUniformQuadAnyKHR :: proc(builder: ^Builder, result_type: Id, predicat
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(predicate))
+	assert(predicate != 0)
 	return builder.current_id^
 }
 
@@ -6387,19 +7748,33 @@ OpHitObjectRecordHitMotionNV :: proc(builder: ^Builder, hit_object: Id, accelera
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	append(&builder.data, u32(acceleration_structure))
+	assert(acceleration_structure != 0)
 	append(&builder.data, u32(instanceid))
+	assert(instanceid != 0)
 	append(&builder.data, u32(primitiveid))
+	assert(primitiveid != 0)
 	append(&builder.data, u32(geometryindex))
+	assert(geometryindex != 0)
 	append(&builder.data, u32(hit_kind))
+	assert(hit_kind != 0)
 	append(&builder.data, u32(sbt_record_offset))
+	assert(sbt_record_offset != 0)
 	append(&builder.data, u32(sbt_record_stride))
+	assert(sbt_record_stride != 0)
 	append(&builder.data, u32(origin))
+	assert(origin != 0)
 	append(&builder.data, u32(tmin))
+	assert(tmin != 0)
 	append(&builder.data, u32(direction))
+	assert(direction != 0)
 	append(&builder.data, u32(tmax))
+	assert(tmax != 0)
 	append(&builder.data, u32(current_time))
+	assert(current_time != 0)
 	append(&builder.data, u32(hitobject_attributes))
+	assert(hitobject_attributes != 0)
 }
 
 OpHitObjectRecordHitWithIndexMotionNV :: proc(builder: ^Builder, hit_object: Id, acceleration_structure: Id, instanceid: Id, primitiveid: Id, geometryindex: Id, hit_kind: Id, sbt_record_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, current_time: Id, hitobject_attributes: Id) -> () {
@@ -6408,18 +7783,31 @@ OpHitObjectRecordHitWithIndexMotionNV :: proc(builder: ^Builder, hit_object: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	append(&builder.data, u32(acceleration_structure))
+	assert(acceleration_structure != 0)
 	append(&builder.data, u32(instanceid))
+	assert(instanceid != 0)
 	append(&builder.data, u32(primitiveid))
+	assert(primitiveid != 0)
 	append(&builder.data, u32(geometryindex))
+	assert(geometryindex != 0)
 	append(&builder.data, u32(hit_kind))
+	assert(hit_kind != 0)
 	append(&builder.data, u32(sbt_record_index))
+	assert(sbt_record_index != 0)
 	append(&builder.data, u32(origin))
+	assert(origin != 0)
 	append(&builder.data, u32(tmin))
+	assert(tmin != 0)
 	append(&builder.data, u32(direction))
+	assert(direction != 0)
 	append(&builder.data, u32(tmax))
+	assert(tmax != 0)
 	append(&builder.data, u32(current_time))
+	assert(current_time != 0)
 	append(&builder.data, u32(hitobject_attributes))
+	assert(hitobject_attributes != 0)
 }
 
 OpHitObjectRecordMissMotionNV :: proc(builder: ^Builder, hit_object: Id, sbt_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, current_time: Id) -> () {
@@ -6428,12 +7816,19 @@ OpHitObjectRecordMissMotionNV :: proc(builder: ^Builder, hit_object: Id, sbt_ind
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	append(&builder.data, u32(sbt_index))
+	assert(sbt_index != 0)
 	append(&builder.data, u32(origin))
+	assert(origin != 0)
 	append(&builder.data, u32(tmin))
+	assert(tmin != 0)
 	append(&builder.data, u32(direction))
+	assert(direction != 0)
 	append(&builder.data, u32(tmax))
+	assert(tmax != 0)
 	append(&builder.data, u32(current_time))
+	assert(current_time != 0)
 }
 
 OpHitObjectGetWorldToObjectNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
@@ -6442,8 +7837,10 @@ OpHitObjectGetWorldToObjectNV :: proc(builder: ^Builder, result_type: Id, hit_ob
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6453,8 +7850,10 @@ OpHitObjectGetObjectToWorldNV :: proc(builder: ^Builder, result_type: Id, hit_ob
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6464,8 +7863,10 @@ OpHitObjectGetObjectRayDirectionNV :: proc(builder: ^Builder, result_type: Id, h
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6475,8 +7876,10 @@ OpHitObjectGetObjectRayOriginNV :: proc(builder: ^Builder, result_type: Id, hit_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6486,18 +7889,31 @@ OpHitObjectTraceRayMotionNV :: proc(builder: ^Builder, hit_object: Id, accelerat
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	append(&builder.data, u32(acceleration_structure))
+	assert(acceleration_structure != 0)
 	append(&builder.data, u32(rayflags))
+	assert(rayflags != 0)
 	append(&builder.data, u32(cullmask))
+	assert(cullmask != 0)
 	append(&builder.data, u32(sbt_record_offset))
+	assert(sbt_record_offset != 0)
 	append(&builder.data, u32(sbt_record_stride))
+	assert(sbt_record_stride != 0)
 	append(&builder.data, u32(miss_index))
+	assert(miss_index != 0)
 	append(&builder.data, u32(origin))
+	assert(origin != 0)
 	append(&builder.data, u32(tmin))
+	assert(tmin != 0)
 	append(&builder.data, u32(direction))
+	assert(direction != 0)
 	append(&builder.data, u32(tmax))
+	assert(tmax != 0)
 	append(&builder.data, u32(time))
+	assert(time != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 }
 
 OpHitObjectGetShaderRecordBufferHandleNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
@@ -6506,8 +7922,10 @@ OpHitObjectGetShaderRecordBufferHandleNV :: proc(builder: ^Builder, result_type:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6517,8 +7935,10 @@ OpHitObjectGetShaderBindingTableRecordIndexNV :: proc(builder: ^Builder, result_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6528,6 +7948,7 @@ OpHitObjectRecordEmptyNV :: proc(builder: ^Builder, hit_object: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 }
 
 OpHitObjectTraceRayNV :: proc(builder: ^Builder, hit_object: Id, acceleration_structure: Id, rayflags: Id, cullmask: Id, sbt_record_offset: Id, sbt_record_stride: Id, miss_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, payload: Id) -> () {
@@ -6536,17 +7957,29 @@ OpHitObjectTraceRayNV :: proc(builder: ^Builder, hit_object: Id, acceleration_st
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	append(&builder.data, u32(acceleration_structure))
+	assert(acceleration_structure != 0)
 	append(&builder.data, u32(rayflags))
+	assert(rayflags != 0)
 	append(&builder.data, u32(cullmask))
+	assert(cullmask != 0)
 	append(&builder.data, u32(sbt_record_offset))
+	assert(sbt_record_offset != 0)
 	append(&builder.data, u32(sbt_record_stride))
+	assert(sbt_record_stride != 0)
 	append(&builder.data, u32(miss_index))
+	assert(miss_index != 0)
 	append(&builder.data, u32(origin))
+	assert(origin != 0)
 	append(&builder.data, u32(tmin))
+	assert(tmin != 0)
 	append(&builder.data, u32(direction))
+	assert(direction != 0)
 	append(&builder.data, u32(tmax))
+	assert(tmax != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 }
 
 OpHitObjectRecordHitNV :: proc(builder: ^Builder, hit_object: Id, acceleration_structure: Id, instanceid: Id, primitiveid: Id, geometryindex: Id, hit_kind: Id, sbt_record_offset: Id, sbt_record_stride: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, hitobject_attributes: Id) -> () {
@@ -6555,18 +7988,31 @@ OpHitObjectRecordHitNV :: proc(builder: ^Builder, hit_object: Id, acceleration_s
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	append(&builder.data, u32(acceleration_structure))
+	assert(acceleration_structure != 0)
 	append(&builder.data, u32(instanceid))
+	assert(instanceid != 0)
 	append(&builder.data, u32(primitiveid))
+	assert(primitiveid != 0)
 	append(&builder.data, u32(geometryindex))
+	assert(geometryindex != 0)
 	append(&builder.data, u32(hit_kind))
+	assert(hit_kind != 0)
 	append(&builder.data, u32(sbt_record_offset))
+	assert(sbt_record_offset != 0)
 	append(&builder.data, u32(sbt_record_stride))
+	assert(sbt_record_stride != 0)
 	append(&builder.data, u32(origin))
+	assert(origin != 0)
 	append(&builder.data, u32(tmin))
+	assert(tmin != 0)
 	append(&builder.data, u32(direction))
+	assert(direction != 0)
 	append(&builder.data, u32(tmax))
+	assert(tmax != 0)
 	append(&builder.data, u32(hitobject_attributes))
+	assert(hitobject_attributes != 0)
 }
 
 OpHitObjectRecordHitWithIndexNV :: proc(builder: ^Builder, hit_object: Id, acceleration_structure: Id, instanceid: Id, primitiveid: Id, geometryindex: Id, hit_kind: Id, sbt_record_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id, hitobject_attributes: Id) -> () {
@@ -6575,17 +8021,29 @@ OpHitObjectRecordHitWithIndexNV :: proc(builder: ^Builder, hit_object: Id, accel
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	append(&builder.data, u32(acceleration_structure))
+	assert(acceleration_structure != 0)
 	append(&builder.data, u32(instanceid))
+	assert(instanceid != 0)
 	append(&builder.data, u32(primitiveid))
+	assert(primitiveid != 0)
 	append(&builder.data, u32(geometryindex))
+	assert(geometryindex != 0)
 	append(&builder.data, u32(hit_kind))
+	assert(hit_kind != 0)
 	append(&builder.data, u32(sbt_record_index))
+	assert(sbt_record_index != 0)
 	append(&builder.data, u32(origin))
+	assert(origin != 0)
 	append(&builder.data, u32(tmin))
+	assert(tmin != 0)
 	append(&builder.data, u32(direction))
+	assert(direction != 0)
 	append(&builder.data, u32(tmax))
+	assert(tmax != 0)
 	append(&builder.data, u32(hitobject_attributes))
+	assert(hitobject_attributes != 0)
 }
 
 OpHitObjectRecordMissNV :: proc(builder: ^Builder, hit_object: Id, sbt_index: Id, origin: Id, tmin: Id, direction: Id, tmax: Id) -> () {
@@ -6594,11 +8052,17 @@ OpHitObjectRecordMissNV :: proc(builder: ^Builder, hit_object: Id, sbt_index: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	append(&builder.data, u32(sbt_index))
+	assert(sbt_index != 0)
 	append(&builder.data, u32(origin))
+	assert(origin != 0)
 	append(&builder.data, u32(tmin))
+	assert(tmin != 0)
 	append(&builder.data, u32(direction))
+	assert(direction != 0)
 	append(&builder.data, u32(tmax))
+	assert(tmax != 0)
 }
 
 OpHitObjectExecuteShaderNV :: proc(builder: ^Builder, hit_object: Id, payload: Id) -> () {
@@ -6607,7 +8071,9 @@ OpHitObjectExecuteShaderNV :: proc(builder: ^Builder, hit_object: Id, payload: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 }
 
 OpHitObjectGetCurrentTimeNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
@@ -6616,8 +8082,10 @@ OpHitObjectGetCurrentTimeNV :: proc(builder: ^Builder, result_type: Id, hit_obje
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6627,7 +8095,9 @@ OpHitObjectGetAttributesNV :: proc(builder: ^Builder, hit_object: Id, hit_object
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	append(&builder.data, u32(hit_object_attribute))
+	assert(hit_object_attribute != 0)
 }
 
 OpHitObjectGetHitKindNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -> (result: Id) {
@@ -6636,8 +8106,10 @@ OpHitObjectGetHitKindNV :: proc(builder: ^Builder, result_type: Id, hit_object: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6647,8 +8119,10 @@ OpHitObjectGetPrimitiveIndexNV :: proc(builder: ^Builder, result_type: Id, hit_o
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6658,8 +8132,10 @@ OpHitObjectGetGeometryIndexNV :: proc(builder: ^Builder, result_type: Id, hit_ob
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6669,8 +8145,10 @@ OpHitObjectGetInstanceIdNV :: proc(builder: ^Builder, result_type: Id, hit_objec
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6680,8 +8158,10 @@ OpHitObjectGetInstanceCustomIndexNV :: proc(builder: ^Builder, result_type: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6691,8 +8171,10 @@ OpHitObjectGetWorldRayDirectionNV :: proc(builder: ^Builder, result_type: Id, hi
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6702,8 +8184,10 @@ OpHitObjectGetWorldRayOriginNV :: proc(builder: ^Builder, result_type: Id, hit_o
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6713,8 +8197,10 @@ OpHitObjectGetRayTMaxNV :: proc(builder: ^Builder, result_type: Id, hit_object: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6724,8 +8210,10 @@ OpHitObjectGetRayTMinNV :: proc(builder: ^Builder, result_type: Id, hit_object: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6735,8 +8223,10 @@ OpHitObjectIsEmptyNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6746,8 +8236,10 @@ OpHitObjectIsHitNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) -
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6757,8 +8249,10 @@ OpHitObjectIsMissNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id) 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -6768,8 +8262,15 @@ OpReorderThreadWithHitObjectNV :: proc(builder: ^Builder, hit_object: Id, hint: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(hit_object))
-	if hint, ok := hint.?; ok do append(&builder.data, u32(hint))
-	if bits, ok := bits.?; ok do append(&builder.data, u32(bits))
+	assert(hit_object != 0)
+	if hint, ok := hint.?; ok {
+		append(&builder.data, u32(hint))
+		assert(hint != 0)
+	}
+	if bits, ok := bits.?; ok {
+		append(&builder.data, u32(bits))
+		assert(bits != 0)
+	}
 }
 
 OpReorderThreadWithHintNV :: proc(builder: ^Builder, hint: Id, bits: Id) -> () {
@@ -6778,7 +8279,9 @@ OpReorderThreadWithHintNV :: proc(builder: ^Builder, hint: Id, bits: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(hint))
+	assert(hint != 0)
 	append(&builder.data, u32(bits))
+	assert(bits != 0)
 }
 
 OpTypeHitObjectNV :: proc(builder: ^Builder) -> (result: Id) {
@@ -6796,12 +8299,19 @@ OpImageSampleFootprintNV :: proc(builder: ^Builder, result_type: Id, sampled_ima
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sampled_image))
+	assert(sampled_image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(granularity))
+	assert(granularity != 0)
 	append(&builder.data, u32(coarse))
-	if _operand_6, ok := _operand_6.?; ok do append(&builder.data, transmute(u32)_operand_6)
+	assert(coarse != 0)
+	if _operand_6, ok := _operand_6.?; ok {
+		append(&builder.data, transmute(u32)_operand_6)
+	}
 	return builder.current_id^
 }
 
@@ -6812,7 +8322,9 @@ OpTypeCooperativeVectorNV :: proc(builder: ^Builder, component_type: Id, compone
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(component_type))
+	assert(component_type != 0)
 	append(&builder.data, u32(component_count))
+	assert(component_count != 0)
 	return builder.current_id^
 }
 
@@ -6822,18 +8334,33 @@ OpCooperativeVectorMatrixMulNV :: proc(builder: ^Builder, result_type: Id, input
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(input))
+	assert(input != 0)
 	append(&builder.data, u32(inputinterpretation))
+	assert(inputinterpretation != 0)
 	append(&builder.data, u32(matrix_))
+	assert(matrix_ != 0)
 	append(&builder.data, u32(matrixoffset))
+	assert(matrixoffset != 0)
 	append(&builder.data, u32(matrixinterpretation))
+	assert(matrixinterpretation != 0)
 	append(&builder.data, u32(m))
+	assert(m != 0)
 	append(&builder.data, u32(k))
+	assert(k != 0)
 	append(&builder.data, u32(memorylayout))
+	assert(memorylayout != 0)
 	append(&builder.data, u32(transpose))
-	if matrixstride, ok := matrixstride.?; ok do append(&builder.data, u32(matrixstride))
-	if _operand_12, ok := _operand_12.?; ok do append(&builder.data, transmute(u32)_operand_12)
+	assert(transpose != 0)
+	if matrixstride, ok := matrixstride.?; ok {
+		append(&builder.data, u32(matrixstride))
+		assert(matrixstride != 0)
+	}
+	if _operand_12, ok := _operand_12.?; ok {
+		append(&builder.data, transmute(u32)_operand_12)
+	}
 	return builder.current_id^
 }
 
@@ -6843,12 +8370,21 @@ OpCooperativeVectorOuterProductAccumulateNV :: proc(builder: ^Builder, pointer: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(offset))
+	assert(offset != 0)
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(memorylayout))
+	assert(memorylayout != 0)
 	append(&builder.data, u32(matrixinterpretation))
-	if matrixstride, ok := matrixstride.?; ok do append(&builder.data, u32(matrixstride))
+	assert(matrixinterpretation != 0)
+	if matrixstride, ok := matrixstride.?; ok {
+		append(&builder.data, u32(matrixstride))
+		assert(matrixstride != 0)
+	}
 }
 
 OpCooperativeVectorReduceSumAccumulateNV :: proc(builder: ^Builder, pointer: Id, offset: Id, v: Id) -> () {
@@ -6857,8 +8393,11 @@ OpCooperativeVectorReduceSumAccumulateNV :: proc(builder: ^Builder, pointer: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(offset))
+	assert(offset != 0)
 	append(&builder.data, u32(v))
+	assert(v != 0)
 }
 
 OpCooperativeVectorMatrixMulAddNV :: proc(builder: ^Builder, result_type: Id, input: Id, inputinterpretation: Id, matrix_: Id, matrixoffset: Id, matrixinterpretation: Id, bias: Id, biasoffset: Id, biasinterpretation: Id, m: Id, k: Id, memorylayout: Id, transpose: Id, matrixstride: Maybe(Id) = nil, _operand_15: Maybe(CooperativeMatrixOperands) = nil) -> (result: Id) {
@@ -6867,21 +8406,39 @@ OpCooperativeVectorMatrixMulAddNV :: proc(builder: ^Builder, result_type: Id, in
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(input))
+	assert(input != 0)
 	append(&builder.data, u32(inputinterpretation))
+	assert(inputinterpretation != 0)
 	append(&builder.data, u32(matrix_))
+	assert(matrix_ != 0)
 	append(&builder.data, u32(matrixoffset))
+	assert(matrixoffset != 0)
 	append(&builder.data, u32(matrixinterpretation))
+	assert(matrixinterpretation != 0)
 	append(&builder.data, u32(bias))
+	assert(bias != 0)
 	append(&builder.data, u32(biasoffset))
+	assert(biasoffset != 0)
 	append(&builder.data, u32(biasinterpretation))
+	assert(biasinterpretation != 0)
 	append(&builder.data, u32(m))
+	assert(m != 0)
 	append(&builder.data, u32(k))
+	assert(k != 0)
 	append(&builder.data, u32(memorylayout))
+	assert(memorylayout != 0)
 	append(&builder.data, u32(transpose))
-	if matrixstride, ok := matrixstride.?; ok do append(&builder.data, u32(matrixstride))
-	if _operand_15, ok := _operand_15.?; ok do append(&builder.data, transmute(u32)_operand_15)
+	assert(transpose != 0)
+	if matrixstride, ok := matrixstride.?; ok {
+		append(&builder.data, u32(matrixstride))
+		assert(matrixstride != 0)
+	}
+	if _operand_15, ok := _operand_15.?; ok {
+		append(&builder.data, transmute(u32)_operand_15)
+	}
 	return builder.current_id^
 }
 
@@ -6891,8 +8448,10 @@ OpCooperativeMatrixConvertNV :: proc(builder: ^Builder, result_type: Id, matrix_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(matrix_))
+	assert(matrix_ != 0)
 	return builder.current_id^
 }
 
@@ -6902,9 +8461,15 @@ OpEmitMeshTasksEXT :: proc(builder: ^Builder, group_count_x: Id, group_count_y: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(group_count_x))
+	assert(group_count_x != 0)
 	append(&builder.data, u32(group_count_y))
+	assert(group_count_y != 0)
 	append(&builder.data, u32(group_count_z))
-	if payload, ok := payload.?; ok do append(&builder.data, u32(payload))
+	assert(group_count_z != 0)
+	if payload, ok := payload.?; ok {
+		append(&builder.data, u32(payload))
+		assert(payload != 0)
+	}
 }
 
 OpSetMeshOutputsEXT :: proc(builder: ^Builder, vertex_count: Id, primitive_count: Id) -> () {
@@ -6913,7 +8478,9 @@ OpSetMeshOutputsEXT :: proc(builder: ^Builder, vertex_count: Id, primitive_count
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(vertex_count))
+	assert(vertex_count != 0)
 	append(&builder.data, u32(primitive_count))
+	assert(primitive_count != 0)
 }
 
 OpGroupNonUniformPartitionNV :: proc(builder: ^Builder, result_type: Id, value: Id) -> (result: Id) {
@@ -6922,8 +8489,10 @@ OpGroupNonUniformPartitionNV :: proc(builder: ^Builder, result_type: Id, value: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -6933,7 +8502,9 @@ OpWritePackedPrimitiveIndices4x8NV :: proc(builder: ^Builder, index_offset: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(index_offset))
+	assert(index_offset != 0)
 	append(&builder.data, u32(packed_indices))
+	assert(packed_indices != 0)
 }
 
 OpFetchMicroTriangleVertexPositionNV :: proc(builder: ^Builder, result_type: Id, accel: Id, instance_id: Id, geometry_index: Id, primitive_index: Id, barycentric: Id) -> (result: Id) {
@@ -6942,12 +8513,18 @@ OpFetchMicroTriangleVertexPositionNV :: proc(builder: ^Builder, result_type: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(accel))
+	assert(accel != 0)
 	append(&builder.data, u32(instance_id))
+	assert(instance_id != 0)
 	append(&builder.data, u32(geometry_index))
+	assert(geometry_index != 0)
 	append(&builder.data, u32(primitive_index))
+	assert(primitive_index != 0)
 	append(&builder.data, u32(barycentric))
+	assert(barycentric != 0)
 	return builder.current_id^
 }
 
@@ -6957,12 +8534,18 @@ OpFetchMicroTriangleVertexBarycentricNV :: proc(builder: ^Builder, result_type: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(accel))
+	assert(accel != 0)
 	append(&builder.data, u32(instance_id))
+	assert(instance_id != 0)
 	append(&builder.data, u32(geometry_index))
+	assert(geometry_index != 0)
 	append(&builder.data, u32(primitive_index))
+	assert(primitive_index != 0)
 	append(&builder.data, u32(barycentric))
+	assert(barycentric != 0)
 	return builder.current_id^
 }
 
@@ -6972,10 +8555,15 @@ OpCooperativeVectorLoadNV :: proc(builder: ^Builder, result_type: Id, pointer: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(offset))
-	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	assert(offset != 0)
+	if _operand_4, ok := _operand_4.?; ok {
+		append(&builder.data, transmute(u32)_operand_4)
+	}
 	return builder.current_id^
 }
 
@@ -6985,9 +8573,14 @@ OpCooperativeVectorStoreNV :: proc(builder: ^Builder, pointer: Id, offset: Id, o
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(offset))
+	assert(offset != 0)
 	append(&builder.data, u32(object))
-	if _operand_3, ok := _operand_3.?; ok do append(&builder.data, transmute(u32)_operand_3)
+	assert(object != 0)
+	if _operand_3, ok := _operand_3.?; ok {
+		append(&builder.data, transmute(u32)_operand_3)
+	}
 }
 
 OpReportIntersectionKHR :: proc(builder: ^Builder, result_type: Id, hit: Id, hitkind: Id) -> (result: Id) {
@@ -6996,9 +8589,12 @@ OpReportIntersectionKHR :: proc(builder: ^Builder, result_type: Id, hit: Id, hit
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit))
+	assert(hit != 0)
 	append(&builder.data, u32(hitkind))
+	assert(hitkind != 0)
 	return builder.current_id^
 }
 
@@ -7022,16 +8618,27 @@ OpTraceNV :: proc(builder: ^Builder, accel: Id, ray_flags: Id, cull_mask: Id, sb
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(accel))
+	assert(accel != 0)
 	append(&builder.data, u32(ray_flags))
+	assert(ray_flags != 0)
 	append(&builder.data, u32(cull_mask))
+	assert(cull_mask != 0)
 	append(&builder.data, u32(sbt_offset))
+	assert(sbt_offset != 0)
 	append(&builder.data, u32(sbt_stride))
+	assert(sbt_stride != 0)
 	append(&builder.data, u32(miss_index))
+	assert(miss_index != 0)
 	append(&builder.data, u32(ray_origin))
+	assert(ray_origin != 0)
 	append(&builder.data, u32(ray_tmin))
+	assert(ray_tmin != 0)
 	append(&builder.data, u32(ray_direction))
+	assert(ray_direction != 0)
 	append(&builder.data, u32(ray_tmax))
+	assert(ray_tmax != 0)
 	append(&builder.data, u32(payloadid))
+	assert(payloadid != 0)
 }
 
 OpTraceMotionNV :: proc(builder: ^Builder, accel: Id, ray_flags: Id, cull_mask: Id, sbt_offset: Id, sbt_stride: Id, miss_index: Id, ray_origin: Id, ray_tmin: Id, ray_direction: Id, ray_tmax: Id, time: Id, payloadid: Id) -> () {
@@ -7040,17 +8647,29 @@ OpTraceMotionNV :: proc(builder: ^Builder, accel: Id, ray_flags: Id, cull_mask: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(accel))
+	assert(accel != 0)
 	append(&builder.data, u32(ray_flags))
+	assert(ray_flags != 0)
 	append(&builder.data, u32(cull_mask))
+	assert(cull_mask != 0)
 	append(&builder.data, u32(sbt_offset))
+	assert(sbt_offset != 0)
 	append(&builder.data, u32(sbt_stride))
+	assert(sbt_stride != 0)
 	append(&builder.data, u32(miss_index))
+	assert(miss_index != 0)
 	append(&builder.data, u32(ray_origin))
+	assert(ray_origin != 0)
 	append(&builder.data, u32(ray_tmin))
+	assert(ray_tmin != 0)
 	append(&builder.data, u32(ray_direction))
+	assert(ray_direction != 0)
 	append(&builder.data, u32(ray_tmax))
+	assert(ray_tmax != 0)
 	append(&builder.data, u32(time))
+	assert(time != 0)
 	append(&builder.data, u32(payloadid))
+	assert(payloadid != 0)
 }
 
 OpTraceRayMotionNV :: proc(builder: ^Builder, accel: Id, ray_flags: Id, cull_mask: Id, sbt_offset: Id, sbt_stride: Id, miss_index: Id, ray_origin: Id, ray_tmin: Id, ray_direction: Id, ray_tmax: Id, time: Id, payload: Id) -> () {
@@ -7059,17 +8678,29 @@ OpTraceRayMotionNV :: proc(builder: ^Builder, accel: Id, ray_flags: Id, cull_mas
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(accel))
+	assert(accel != 0)
 	append(&builder.data, u32(ray_flags))
+	assert(ray_flags != 0)
 	append(&builder.data, u32(cull_mask))
+	assert(cull_mask != 0)
 	append(&builder.data, u32(sbt_offset))
+	assert(sbt_offset != 0)
 	append(&builder.data, u32(sbt_stride))
+	assert(sbt_stride != 0)
 	append(&builder.data, u32(miss_index))
+	assert(miss_index != 0)
 	append(&builder.data, u32(ray_origin))
+	assert(ray_origin != 0)
 	append(&builder.data, u32(ray_tmin))
+	assert(ray_tmin != 0)
 	append(&builder.data, u32(ray_direction))
+	assert(ray_direction != 0)
 	append(&builder.data, u32(ray_tmax))
+	assert(ray_tmax != 0)
 	append(&builder.data, u32(time))
+	assert(time != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 }
 
 OpRayQueryGetIntersectionTriangleVertexPositionsKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
@@ -7078,9 +8709,12 @@ OpRayQueryGetIntersectionTriangleVertexPositionsKHR :: proc(builder: ^Builder, r
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -7099,7 +8733,9 @@ OpExecuteCallableNV :: proc(builder: ^Builder, sbt_index: Id, callable_dataid: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(sbt_index))
+	assert(sbt_index != 0)
 	append(&builder.data, u32(callable_dataid))
+	assert(callable_dataid != 0)
 }
 
 OpRayQueryGetIntersectionClusterIdNV :: proc(builder: ^Builder, result_type: Id, rayquery: Id, intersection: Id) -> (result: Id) {
@@ -7108,9 +8744,12 @@ OpRayQueryGetIntersectionClusterIdNV :: proc(builder: ^Builder, result_type: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -7120,8 +8759,10 @@ OpHitObjectGetClusterIdNV :: proc(builder: ^Builder, result_type: Id, hit_object
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -7132,9 +8773,13 @@ OpTypeCooperativeMatrixNV :: proc(builder: ^Builder, component_type: Id, executi
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(component_type))
+	assert(component_type != 0)
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(rows))
+	assert(rows != 0)
 	append(&builder.data, u32(columns))
+	assert(columns != 0)
 	return builder.current_id^
 }
 
@@ -7144,11 +8789,17 @@ OpCooperativeMatrixLoadNV :: proc(builder: ^Builder, result_type: Id, pointer: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(stride))
+	assert(stride != 0)
 	append(&builder.data, u32(column_major))
-	if _operand_5, ok := _operand_5.?; ok do append(&builder.data, transmute(u32)_operand_5)
+	assert(column_major != 0)
+	if _operand_5, ok := _operand_5.?; ok {
+		append(&builder.data, transmute(u32)_operand_5)
+	}
 	return builder.current_id^
 }
 
@@ -7158,10 +8809,16 @@ OpCooperativeMatrixStoreNV :: proc(builder: ^Builder, pointer: Id, object: Id, s
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(object))
+	assert(object != 0)
 	append(&builder.data, u32(stride))
+	assert(stride != 0)
 	append(&builder.data, u32(column_major))
-	if _operand_4, ok := _operand_4.?; ok do append(&builder.data, transmute(u32)_operand_4)
+	assert(column_major != 0)
+	if _operand_4, ok := _operand_4.?; ok {
+		append(&builder.data, transmute(u32)_operand_4)
+	}
 }
 
 OpCooperativeMatrixMulAddNV :: proc(builder: ^Builder, result_type: Id, a: Id, b: Id, c: Id) -> (result: Id) {
@@ -7170,10 +8827,14 @@ OpCooperativeMatrixMulAddNV :: proc(builder: ^Builder, result_type: Id, a: Id, b
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(c))
+	assert(c != 0)
 	return builder.current_id^
 }
 
@@ -7183,8 +8844,10 @@ OpCooperativeMatrixLengthNV :: proc(builder: ^Builder, result_type: Id, type: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(type))
+	assert(type != 0)
 	return builder.current_id^
 }
 
@@ -7208,10 +8871,13 @@ OpCooperativeMatrixReduceNV :: proc(builder: ^Builder, result_type: Id, matrix_:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(matrix_))
+	assert(matrix_ != 0)
 	append(&builder.data, transmute(u32)reduce)
 	append(&builder.data, u32(combinefunc))
+	assert(combinefunc != 0)
 	return builder.current_id^
 }
 
@@ -7221,10 +8887,14 @@ OpCooperativeMatrixLoadTensorNV :: proc(builder: ^Builder, result_type: Id, poin
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(object))
+	assert(object != 0)
 	append(&builder.data, u32(tensorlayout))
+	assert(tensorlayout != 0)
 	append(&builder.data, transmute(u32)memory_operand)
 	append(&builder.data, transmute(u32)tensor_addressing_operands)
 	return builder.current_id^
@@ -7236,8 +8906,11 @@ OpCooperativeMatrixStoreTensorNV :: proc(builder: ^Builder, pointer: Id, object:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(object))
+	assert(object != 0)
 	append(&builder.data, u32(tensorlayout))
+	assert(tensorlayout != 0)
 	append(&builder.data, transmute(u32)memory_operand)
 	append(&builder.data, transmute(u32)tensor_addressing_operands)
 }
@@ -7248,10 +8921,16 @@ OpCooperativeMatrixPerElementOpNV :: proc(builder: ^Builder, result_type: Id, ma
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(matrix_))
+	assert(matrix_ != 0)
 	append(&builder.data, u32(func))
-	for operands in operands do append(&builder.data, u32(operands))
+	assert(func != 0)
+	for operands in operands {
+		append(&builder.data, u32(operands))
+		assert(operands != 0)
+	}
 	return builder.current_id^
 }
 
@@ -7262,7 +8941,9 @@ OpTypeTensorLayoutNV :: proc(builder: ^Builder, dim: Id, clampmode: Id) -> (resu
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(dim))
+	assert(dim != 0)
 	append(&builder.data, u32(clampmode))
+	assert(clampmode != 0)
 	return builder.current_id^
 }
 
@@ -7273,8 +8954,13 @@ OpTypeTensorViewNV :: proc(builder: ^Builder, dim: Id, hasdimensions: Id, p: ..I
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(dim))
+	assert(dim != 0)
 	append(&builder.data, u32(hasdimensions))
-	for p in p do append(&builder.data, u32(p))
+	assert(hasdimensions != 0)
+	for p in p {
+		append(&builder.data, u32(p))
+		assert(p != 0)
+	}
 	return builder.current_id^
 }
 
@@ -7284,6 +8970,7 @@ OpCreateTensorLayoutNV :: proc(builder: ^Builder, result_type: Id) -> (result: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -7294,9 +8981,14 @@ OpTensorLayoutSetDimensionNV :: proc(builder: ^Builder, result_type: Id, tensorl
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(tensorlayout))
-	for dim in dim do append(&builder.data, u32(dim))
+	assert(tensorlayout != 0)
+	for dim in dim {
+		append(&builder.data, u32(dim))
+		assert(dim != 0)
+	}
 	return builder.current_id^
 }
 
@@ -7306,9 +8998,14 @@ OpTensorLayoutSetStrideNV :: proc(builder: ^Builder, result_type: Id, tensorlayo
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(tensorlayout))
-	for stride in stride do append(&builder.data, u32(stride))
+	assert(tensorlayout != 0)
+	for stride in stride {
+		append(&builder.data, u32(stride))
+		assert(stride != 0)
+	}
 	return builder.current_id^
 }
 
@@ -7318,9 +9015,14 @@ OpTensorLayoutSliceNV :: proc(builder: ^Builder, result_type: Id, tensorlayout: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(tensorlayout))
-	for operands in operands do append(&builder.data, u32(operands))
+	assert(tensorlayout != 0)
+	for operands in operands {
+		append(&builder.data, u32(operands))
+		assert(operands != 0)
+	}
 	return builder.current_id^
 }
 
@@ -7330,9 +9032,12 @@ OpTensorLayoutSetClampValueNV :: proc(builder: ^Builder, result_type: Id, tensor
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(tensorlayout))
+	assert(tensorlayout != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -7342,6 +9047,7 @@ OpCreateTensorViewNV :: proc(builder: ^Builder, result_type: Id) -> (result: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -7352,9 +9058,14 @@ OpTensorViewSetDimensionNV :: proc(builder: ^Builder, result_type: Id, tensorvie
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(tensorview))
-	for dim in dim do append(&builder.data, u32(dim))
+	assert(tensorview != 0)
+	for dim in dim {
+		append(&builder.data, u32(dim))
+		assert(dim != 0)
+	}
 	return builder.current_id^
 }
 
@@ -7364,9 +9075,14 @@ OpTensorViewSetStrideNV :: proc(builder: ^Builder, result_type: Id, tensorview: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(tensorview))
-	for stride in stride do append(&builder.data, u32(stride))
+	assert(tensorview != 0)
+	for stride in stride {
+		append(&builder.data, u32(stride))
+		assert(stride != 0)
+	}
 	return builder.current_id^
 }
 
@@ -7383,6 +9099,7 @@ OpIsHelperInvocationEXT :: proc(builder: ^Builder, result_type: Id) -> (result: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -7393,12 +9110,18 @@ OpTensorViewSetClipNV :: proc(builder: ^Builder, result_type: Id, tensorview: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(tensorview))
+	assert(tensorview != 0)
 	append(&builder.data, u32(cliprowoffset))
+	assert(cliprowoffset != 0)
 	append(&builder.data, u32(cliprowspan))
+	assert(cliprowspan != 0)
 	append(&builder.data, u32(clipcoloffset))
+	assert(clipcoloffset != 0)
 	append(&builder.data, u32(clipcolspan))
+	assert(clipcolspan != 0)
 	return builder.current_id^
 }
 
@@ -7408,9 +9131,14 @@ OpTensorLayoutSetBlockSizeNV :: proc(builder: ^Builder, result_type: Id, tensorl
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(tensorlayout))
-	for blocksize in blocksize do append(&builder.data, u32(blocksize))
+	assert(tensorlayout != 0)
+	for blocksize in blocksize {
+		append(&builder.data, u32(blocksize))
+		assert(blocksize != 0)
+	}
 	return builder.current_id^
 }
 
@@ -7420,8 +9148,10 @@ OpCooperativeMatrixTransposeNV :: proc(builder: ^Builder, result_type: Id, matri
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(matrix_))
+	assert(matrix_ != 0)
 	return builder.current_id^
 }
 
@@ -7431,8 +9161,10 @@ OpConvertUToImageNV :: proc(builder: ^Builder, result_type: Id, operand: Id) -> 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -7442,8 +9174,10 @@ OpConvertUToSamplerNV :: proc(builder: ^Builder, result_type: Id, operand: Id) -
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -7453,8 +9187,10 @@ OpConvertImageToUNV :: proc(builder: ^Builder, result_type: Id, operand: Id) -> 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -7464,8 +9200,10 @@ OpConvertSamplerToUNV :: proc(builder: ^Builder, result_type: Id, operand: Id) -
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -7475,8 +9213,10 @@ OpConvertUToSampledImageNV :: proc(builder: ^Builder, result_type: Id, operand: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -7486,8 +9226,10 @@ OpConvertSampledImageToUNV :: proc(builder: ^Builder, result_type: Id, operand: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -7505,12 +9247,19 @@ OpRawAccessChainNV :: proc(builder: ^Builder, result_type: Id, base: Id, byte_st
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(base))
+	assert(base != 0)
 	append(&builder.data, u32(byte_stride))
+	assert(byte_stride != 0)
 	append(&builder.data, u32(element_index))
+	assert(element_index != 0)
 	append(&builder.data, u32(byte_offset))
-	if _operand_6, ok := _operand_6.?; ok do append(&builder.data, transmute(u32)_operand_6)
+	assert(byte_offset != 0)
+	if _operand_6, ok := _operand_6.?; ok {
+		append(&builder.data, transmute(u32)_operand_6)
+	}
 	return builder.current_id^
 }
 
@@ -7520,9 +9269,12 @@ OpRayQueryGetIntersectionSpherePositionNV :: proc(builder: ^Builder, result_type
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -7532,9 +9284,12 @@ OpRayQueryGetIntersectionSphereRadiusNV :: proc(builder: ^Builder, result_type: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -7544,9 +9299,12 @@ OpRayQueryGetIntersectionLSSPositionsNV :: proc(builder: ^Builder, result_type: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -7556,9 +9314,12 @@ OpRayQueryGetIntersectionLSSRadiiNV :: proc(builder: ^Builder, result_type: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -7568,9 +9329,12 @@ OpRayQueryGetIntersectionLSSHitValueNV :: proc(builder: ^Builder, result_type: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -7580,8 +9344,10 @@ OpHitObjectGetSpherePositionNV :: proc(builder: ^Builder, result_type: Id, hit_o
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -7591,8 +9357,10 @@ OpHitObjectGetSphereRadiusNV :: proc(builder: ^Builder, result_type: Id, hit_obj
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -7602,8 +9370,10 @@ OpHitObjectGetLSSPositionsNV :: proc(builder: ^Builder, result_type: Id, hit_obj
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -7613,8 +9383,10 @@ OpHitObjectGetLSSRadiiNV :: proc(builder: ^Builder, result_type: Id, hit_object:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -7624,8 +9396,10 @@ OpHitObjectIsSphereHitNV :: proc(builder: ^Builder, result_type: Id, hit_object:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -7635,8 +9409,10 @@ OpHitObjectIsLSSHitNV :: proc(builder: ^Builder, result_type: Id, hit_object: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(hit_object))
+	assert(hit_object != 0)
 	return builder.current_id^
 }
 
@@ -7646,9 +9422,12 @@ OpRayQueryIsSphereHitNV :: proc(builder: ^Builder, result_type: Id, rayquery: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -7658,9 +9437,12 @@ OpRayQueryIsLSSHitNV :: proc(builder: ^Builder, result_type: Id, rayquery: Id, i
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -7670,9 +9452,12 @@ OpSubgroupShuffleINTEL :: proc(builder: ^Builder, result_type: Id, data: Id, inv
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(data))
+	assert(data != 0)
 	append(&builder.data, u32(invocationid))
+	assert(invocationid != 0)
 	return builder.current_id^
 }
 
@@ -7682,10 +9467,14 @@ OpSubgroupShuffleDownINTEL :: proc(builder: ^Builder, result_type: Id, current: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(current))
+	assert(current != 0)
 	append(&builder.data, u32(next))
+	assert(next != 0)
 	append(&builder.data, u32(delta))
+	assert(delta != 0)
 	return builder.current_id^
 }
 
@@ -7695,10 +9484,14 @@ OpSubgroupShuffleUpINTEL :: proc(builder: ^Builder, result_type: Id, previous: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(previous))
+	assert(previous != 0)
 	append(&builder.data, u32(current))
+	assert(current != 0)
 	append(&builder.data, u32(delta))
+	assert(delta != 0)
 	return builder.current_id^
 }
 
@@ -7708,9 +9501,12 @@ OpSubgroupShuffleXorINTEL :: proc(builder: ^Builder, result_type: Id, data: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(data))
+	assert(data != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -7720,8 +9516,10 @@ OpSubgroupBlockReadINTEL :: proc(builder: ^Builder, result_type: Id, ptr: Id) ->
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(ptr))
+	assert(ptr != 0)
 	return builder.current_id^
 }
 
@@ -7731,7 +9529,9 @@ OpSubgroupBlockWriteINTEL :: proc(builder: ^Builder, ptr: Id, data: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(ptr))
+	assert(ptr != 0)
 	append(&builder.data, u32(data))
+	assert(data != 0)
 }
 
 OpSubgroupImageBlockReadINTEL :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id) -> (result: Id) {
@@ -7740,9 +9540,12 @@ OpSubgroupImageBlockReadINTEL :: proc(builder: ^Builder, result_type: Id, image:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	return builder.current_id^
 }
 
@@ -7752,8 +9555,11 @@ OpSubgroupImageBlockWriteINTEL :: proc(builder: ^Builder, image: Id, coordinate:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(data))
+	assert(data != 0)
 }
 
 OpSubgroupImageMediaBlockReadINTEL :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, width: Id, height: Id) -> (result: Id) {
@@ -7762,11 +9568,16 @@ OpSubgroupImageMediaBlockReadINTEL :: proc(builder: ^Builder, result_type: Id, i
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(width))
+	assert(width != 0)
 	append(&builder.data, u32(height))
+	assert(height != 0)
 	return builder.current_id^
 }
 
@@ -7776,10 +9587,15 @@ OpSubgroupImageMediaBlockWriteINTEL :: proc(builder: ^Builder, image: Id, coordi
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(image))
+	assert(image != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(width))
+	assert(width != 0)
 	append(&builder.data, u32(height))
+	assert(height != 0)
 	append(&builder.data, u32(data))
+	assert(data != 0)
 }
 
 OpUCountLeadingZerosINTEL :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
@@ -7788,8 +9604,10 @@ OpUCountLeadingZerosINTEL :: proc(builder: ^Builder, result_type: Id, operand: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -7799,8 +9617,10 @@ OpUCountTrailingZerosINTEL :: proc(builder: ^Builder, result_type: Id, operand: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -7810,9 +9630,12 @@ OpAbsISubINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -7822,9 +9645,12 @@ OpAbsUSubINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -7834,9 +9660,12 @@ OpIAddSatINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -7846,9 +9675,12 @@ OpUAddSatINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -7858,9 +9690,12 @@ OpIAverageINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, opera
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -7870,9 +9705,12 @@ OpUAverageINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, opera
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -7882,9 +9720,12 @@ OpIAverageRoundedINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -7894,9 +9735,12 @@ OpUAverageRoundedINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -7906,9 +9750,12 @@ OpISubSatINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -7918,9 +9765,12 @@ OpUSubSatINTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -7930,9 +9780,12 @@ OpIMul32x16INTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, oper
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -7942,9 +9795,12 @@ OpUMul32x16INTEL :: proc(builder: ^Builder, result_type: Id, operand_1: Id, oper
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand_1))
+	assert(operand_1 != 0)
 	append(&builder.data, u32(operand_2))
+	assert(operand_2 != 0)
 	return builder.current_id^
 }
 
@@ -7954,8 +9810,10 @@ OpConstantFunctionPointerINTEL :: proc(builder: ^Builder, result_type: Id, funct
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(function))
+	assert(function != 0)
 	return builder.current_id^
 }
 
@@ -7965,8 +9823,12 @@ OpFunctionPointerCallINTEL :: proc(builder: ^Builder, result_type: Id, operand_1
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
-	for operand_1 in operand_1 do append(&builder.data, u32(operand_1))
+	for operand_1 in operand_1 {
+		append(&builder.data, u32(operand_1))
+		assert(operand_1 != 0)
+	}
 	return builder.current_id^
 }
 
@@ -7986,9 +9848,12 @@ OpAsmINTEL :: proc(builder: ^Builder, result_type: Id, asm_type: Id, target: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(asm_type))
+	assert(asm_type != 0)
 	append(&builder.data, u32(target))
+	assert(target != 0)
 	write_string(&builder.data, asm_instructions)
 	write_string(&builder.data, constraints)
 	return builder.current_id^
@@ -8000,9 +9865,14 @@ OpAsmCallINTEL :: proc(builder: ^Builder, result_type: Id, asm_: Id, argument: .
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(asm_))
-	for argument in argument do append(&builder.data, u32(argument))
+	assert(asm_ != 0)
+	for argument in argument {
+		append(&builder.data, u32(argument))
+		assert(argument != 0)
+	}
 	return builder.current_id^
 }
 
@@ -8012,11 +9882,16 @@ OpAtomicFMinEXT :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -8026,11 +9901,16 @@ OpAtomicFMaxEXT :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -8040,6 +9920,7 @@ OpAssumeTrueKHR :: proc(builder: ^Builder, condition: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(condition))
+	assert(condition != 0)
 }
 
 OpExpectKHR :: proc(builder: ^Builder, result_type: Id, value: Id, expectedvalue: Id) -> (result: Id) {
@@ -8048,9 +9929,12 @@ OpExpectKHR :: proc(builder: ^Builder, result_type: Id, value: Id, expectedvalue
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	append(&builder.data, u32(expectedvalue))
+	assert(expectedvalue != 0)
 	return builder.current_id^
 }
 
@@ -8060,6 +9944,7 @@ OpDecorateString :: proc(builder: ^Builder, target: Id, _operand_1: Decoration) 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(target))
+	assert(target != 0)
 	append(&builder.data, transmute(u32)_operand_1)
 }
 
@@ -8069,6 +9954,7 @@ OpMemberDecorateString :: proc(builder: ^Builder, struct_type: Id, member: u32, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(struct_type))
+	assert(struct_type != 0)
 	append(&builder.data, u32(member))
 	append(&builder.data, transmute(u32)_operand_2)
 }
@@ -8079,9 +9965,12 @@ OpVmeImageINTEL :: proc(builder: ^Builder, result_type: Id, image_type: Id, samp
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image_type))
+	assert(image_type != 0)
 	append(&builder.data, u32(sampler))
+	assert(sampler != 0)
 	return builder.current_id^
 }
 
@@ -8092,6 +9981,7 @@ OpTypeVmeImageINTEL :: proc(builder: ^Builder, image_type: Id) -> (result: Id) {
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image_type))
+	assert(image_type != 0)
 	return builder.current_id^
 }
 
@@ -8209,9 +10099,12 @@ OpSubgroupAvcMceGetDefaultInterBaseMultiReferencePenaltyINTEL :: proc(builder: ^
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(slice_type))
+	assert(slice_type != 0)
 	append(&builder.data, u32(qp))
+	assert(qp != 0)
 	return builder.current_id^
 }
 
@@ -8221,9 +10114,12 @@ OpSubgroupAvcMceSetInterBaseMultiReferencePenaltyINTEL :: proc(builder: ^Builder
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(reference_base_penalty))
+	assert(reference_base_penalty != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8233,9 +10129,12 @@ OpSubgroupAvcMceGetDefaultInterShapePenaltyINTEL :: proc(builder: ^Builder, resu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(slice_type))
+	assert(slice_type != 0)
 	append(&builder.data, u32(qp))
+	assert(qp != 0)
 	return builder.current_id^
 }
 
@@ -8245,9 +10144,12 @@ OpSubgroupAvcMceSetInterShapePenaltyINTEL :: proc(builder: ^Builder, result_type
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(packed_shape_penalty))
+	assert(packed_shape_penalty != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8257,9 +10159,12 @@ OpSubgroupAvcMceGetDefaultInterDirectionPenaltyINTEL :: proc(builder: ^Builder, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(slice_type))
+	assert(slice_type != 0)
 	append(&builder.data, u32(qp))
+	assert(qp != 0)
 	return builder.current_id^
 }
 
@@ -8269,9 +10174,12 @@ OpSubgroupAvcMceSetInterDirectionPenaltyINTEL :: proc(builder: ^Builder, result_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(direction_cost))
+	assert(direction_cost != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8281,9 +10189,12 @@ OpSubgroupAvcMceGetDefaultIntraLumaShapePenaltyINTEL :: proc(builder: ^Builder, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(slice_type))
+	assert(slice_type != 0)
 	append(&builder.data, u32(qp))
+	assert(qp != 0)
 	return builder.current_id^
 }
 
@@ -8293,9 +10204,12 @@ OpSubgroupAvcMceGetDefaultInterMotionVectorCostTableINTEL :: proc(builder: ^Buil
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(slice_type))
+	assert(slice_type != 0)
 	append(&builder.data, u32(qp))
+	assert(qp != 0)
 	return builder.current_id^
 }
 
@@ -8305,6 +10219,7 @@ OpSubgroupAvcMceGetDefaultHighPenaltyCostTableINTEL :: proc(builder: ^Builder, r
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -8315,6 +10230,7 @@ OpSubgroupAvcMceGetDefaultMediumPenaltyCostTableINTEL :: proc(builder: ^Builder,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -8325,6 +10241,7 @@ OpSubgroupAvcMceGetDefaultLowPenaltyCostTableINTEL :: proc(builder: ^Builder, re
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -8335,11 +10252,16 @@ OpSubgroupAvcMceSetMotionVectorCostFunctionINTEL :: proc(builder: ^Builder, resu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(packed_cost_center_delta))
+	assert(packed_cost_center_delta != 0)
 	append(&builder.data, u32(packed_cost_table))
+	assert(packed_cost_table != 0)
 	append(&builder.data, u32(cost_precision))
+	assert(cost_precision != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8349,9 +10271,12 @@ OpSubgroupAvcMceGetDefaultIntraLumaModePenaltyINTEL :: proc(builder: ^Builder, r
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(slice_type))
+	assert(slice_type != 0)
 	append(&builder.data, u32(qp))
+	assert(qp != 0)
 	return builder.current_id^
 }
 
@@ -8361,6 +10286,7 @@ OpSubgroupAvcMceGetDefaultNonDcLumaIntraPenaltyINTEL :: proc(builder: ^Builder, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -8371,6 +10297,7 @@ OpSubgroupAvcMceGetDefaultIntraChromaModeBasePenaltyINTEL :: proc(builder: ^Buil
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -8381,8 +10308,10 @@ OpSubgroupAvcMceSetAcOnlyHaarINTEL :: proc(builder: ^Builder, result_type: Id, p
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8392,9 +10321,12 @@ OpSubgroupAvcMceSetSourceInterlacedFieldPolarityINTEL :: proc(builder: ^Builder,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(source_field_polarity))
+	assert(source_field_polarity != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8404,9 +10336,12 @@ OpSubgroupAvcMceSetSingleReferenceInterlacedFieldPolarityINTEL :: proc(builder: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(reference_field_polarity))
+	assert(reference_field_polarity != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8416,10 +10351,14 @@ OpSubgroupAvcMceSetDualReferenceInterlacedFieldPolaritiesINTEL :: proc(builder: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(forward_reference_field_polarity))
+	assert(forward_reference_field_polarity != 0)
 	append(&builder.data, u32(backward_reference_field_polarity))
+	assert(backward_reference_field_polarity != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8429,8 +10368,10 @@ OpSubgroupAvcMceConvertToImePayloadINTEL :: proc(builder: ^Builder, result_type:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8440,8 +10381,10 @@ OpSubgroupAvcMceConvertToImeResultINTEL :: proc(builder: ^Builder, result_type: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8451,8 +10394,10 @@ OpSubgroupAvcMceConvertToRefPayloadINTEL :: proc(builder: ^Builder, result_type:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8462,8 +10407,10 @@ OpSubgroupAvcMceConvertToRefResultINTEL :: proc(builder: ^Builder, result_type: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8473,8 +10420,10 @@ OpSubgroupAvcMceConvertToSicPayloadINTEL :: proc(builder: ^Builder, result_type:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8484,8 +10433,10 @@ OpSubgroupAvcMceConvertToSicResultINTEL :: proc(builder: ^Builder, result_type: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8495,8 +10446,10 @@ OpSubgroupAvcMceGetMotionVectorsINTEL :: proc(builder: ^Builder, result_type: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8506,8 +10459,10 @@ OpSubgroupAvcMceGetInterDistortionsINTEL :: proc(builder: ^Builder, result_type:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8517,8 +10472,10 @@ OpSubgroupAvcMceGetBestInterDistortionsINTEL :: proc(builder: ^Builder, result_t
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8528,8 +10485,10 @@ OpSubgroupAvcMceGetInterMajorShapeINTEL :: proc(builder: ^Builder, result_type: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8539,8 +10498,10 @@ OpSubgroupAvcMceGetInterMinorShapeINTEL :: proc(builder: ^Builder, result_type: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8550,8 +10511,10 @@ OpSubgroupAvcMceGetInterDirectionsINTEL :: proc(builder: ^Builder, result_type: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8561,8 +10524,10 @@ OpSubgroupAvcMceGetInterMotionVectorCountINTEL :: proc(builder: ^Builder, result
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8572,8 +10537,10 @@ OpSubgroupAvcMceGetInterReferenceIdsINTEL :: proc(builder: ^Builder, result_type
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8583,10 +10550,14 @@ OpSubgroupAvcMceGetInterReferenceInterlacedFieldPolaritiesINTEL :: proc(builder:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(packed_reference_ids))
+	assert(packed_reference_ids != 0)
 	append(&builder.data, u32(packed_reference_parameter_field_polarities))
+	assert(packed_reference_parameter_field_polarities != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8596,10 +10567,14 @@ OpSubgroupAvcImeInitializeINTEL :: proc(builder: ^Builder, result_type: Id, src_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_coord))
+	assert(src_coord != 0)
 	append(&builder.data, u32(partition_mask))
+	assert(partition_mask != 0)
 	append(&builder.data, u32(sad_adjustment))
+	assert(sad_adjustment != 0)
 	return builder.current_id^
 }
 
@@ -8609,10 +10584,14 @@ OpSubgroupAvcImeSetSingleReferenceINTEL :: proc(builder: ^Builder, result_type: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(ref_offset))
+	assert(ref_offset != 0)
 	append(&builder.data, u32(search_window_config))
+	assert(search_window_config != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8622,11 +10601,16 @@ OpSubgroupAvcImeSetDualReferenceINTEL :: proc(builder: ^Builder, result_type: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(fwd_ref_offset))
+	assert(fwd_ref_offset != 0)
 	append(&builder.data, u32(bwd_ref_offset))
+	assert(bwd_ref_offset != 0)
 	append(&builder.data, u32(search_window_config))
+	assert(search_window_config != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8636,9 +10620,12 @@ OpSubgroupAvcImeRefWindowSizeINTEL :: proc(builder: ^Builder, result_type: Id, s
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(search_window_config))
+	assert(search_window_config != 0)
 	append(&builder.data, u32(dual_ref))
+	assert(dual_ref != 0)
 	return builder.current_id^
 }
 
@@ -8648,11 +10635,16 @@ OpSubgroupAvcImeAdjustRefOffsetINTEL :: proc(builder: ^Builder, result_type: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(ref_offset))
+	assert(ref_offset != 0)
 	append(&builder.data, u32(src_coord))
+	assert(src_coord != 0)
 	append(&builder.data, u32(ref_window_size))
+	assert(ref_window_size != 0)
 	append(&builder.data, u32(image_size))
+	assert(image_size != 0)
 	return builder.current_id^
 }
 
@@ -8662,8 +10654,10 @@ OpSubgroupAvcImeConvertToMcePayloadINTEL :: proc(builder: ^Builder, result_type:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8673,9 +10667,12 @@ OpSubgroupAvcImeSetMaxMotionVectorCountINTEL :: proc(builder: ^Builder, result_t
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(max_motion_vector_count))
+	assert(max_motion_vector_count != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8685,8 +10682,10 @@ OpSubgroupAvcImeSetUnidirectionalMixDisableINTEL :: proc(builder: ^Builder, resu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8696,9 +10695,12 @@ OpSubgroupAvcImeSetEarlySearchTerminationThresholdINTEL :: proc(builder: ^Builde
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(threshold))
+	assert(threshold != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8708,9 +10710,12 @@ OpSubgroupAvcImeSetWeightedSadINTEL :: proc(builder: ^Builder, result_type: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(packed_sad_weights))
+	assert(packed_sad_weights != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8720,10 +10725,14 @@ OpSubgroupAvcImeEvaluateWithSingleReferenceINTEL :: proc(builder: ^Builder, resu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(ref_image))
+	assert(ref_image != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8733,11 +10742,16 @@ OpSubgroupAvcImeEvaluateWithDualReferenceINTEL :: proc(builder: ^Builder, result
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(fwd_ref_image))
+	assert(fwd_ref_image != 0)
 	append(&builder.data, u32(bwd_ref_image))
+	assert(bwd_ref_image != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8747,11 +10761,16 @@ OpSubgroupAvcImeEvaluateWithSingleReferenceStreaminINTEL :: proc(builder: ^Build
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(ref_image))
+	assert(ref_image != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	append(&builder.data, u32(streamin_components))
+	assert(streamin_components != 0)
 	return builder.current_id^
 }
 
@@ -8761,12 +10780,18 @@ OpSubgroupAvcImeEvaluateWithDualReferenceStreaminINTEL :: proc(builder: ^Builder
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(fwd_ref_image))
+	assert(fwd_ref_image != 0)
 	append(&builder.data, u32(bwd_ref_image))
+	assert(bwd_ref_image != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	append(&builder.data, u32(streamin_components))
+	assert(streamin_components != 0)
 	return builder.current_id^
 }
 
@@ -8776,10 +10801,14 @@ OpSubgroupAvcImeEvaluateWithSingleReferenceStreamoutINTEL :: proc(builder: ^Buil
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(ref_image))
+	assert(ref_image != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8789,11 +10818,16 @@ OpSubgroupAvcImeEvaluateWithDualReferenceStreamoutINTEL :: proc(builder: ^Builde
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(fwd_ref_image))
+	assert(fwd_ref_image != 0)
 	append(&builder.data, u32(bwd_ref_image))
+	assert(bwd_ref_image != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8803,11 +10837,16 @@ OpSubgroupAvcImeEvaluateWithSingleReferenceStreaminoutINTEL :: proc(builder: ^Bu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(ref_image))
+	assert(ref_image != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	append(&builder.data, u32(streamin_components))
+	assert(streamin_components != 0)
 	return builder.current_id^
 }
 
@@ -8817,12 +10856,18 @@ OpSubgroupAvcImeEvaluateWithDualReferenceStreaminoutINTEL :: proc(builder: ^Buil
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(fwd_ref_image))
+	assert(fwd_ref_image != 0)
 	append(&builder.data, u32(bwd_ref_image))
+	assert(bwd_ref_image != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	append(&builder.data, u32(streamin_components))
+	assert(streamin_components != 0)
 	return builder.current_id^
 }
 
@@ -8832,8 +10877,10 @@ OpSubgroupAvcImeConvertToMceResultINTEL :: proc(builder: ^Builder, result_type: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8843,8 +10890,10 @@ OpSubgroupAvcImeGetSingleReferenceStreaminINTEL :: proc(builder: ^Builder, resul
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8854,8 +10903,10 @@ OpSubgroupAvcImeGetDualReferenceStreaminINTEL :: proc(builder: ^Builder, result_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8865,8 +10916,10 @@ OpSubgroupAvcImeStripSingleReferenceStreamoutINTEL :: proc(builder: ^Builder, re
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8876,8 +10929,10 @@ OpSubgroupAvcImeStripDualReferenceStreamoutINTEL :: proc(builder: ^Builder, resu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8887,9 +10942,12 @@ OpSubgroupAvcImeGetStreamoutSingleReferenceMajorShapeMotionVectorsINTEL :: proc(
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	append(&builder.data, u32(major_shape))
+	assert(major_shape != 0)
 	return builder.current_id^
 }
 
@@ -8899,9 +10957,12 @@ OpSubgroupAvcImeGetStreamoutSingleReferenceMajorShapeDistortionsINTEL :: proc(bu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	append(&builder.data, u32(major_shape))
+	assert(major_shape != 0)
 	return builder.current_id^
 }
 
@@ -8911,9 +10972,12 @@ OpSubgroupAvcImeGetStreamoutSingleReferenceMajorShapeReferenceIdsINTEL :: proc(b
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	append(&builder.data, u32(major_shape))
+	assert(major_shape != 0)
 	return builder.current_id^
 }
 
@@ -8923,10 +10987,14 @@ OpSubgroupAvcImeGetStreamoutDualReferenceMajorShapeMotionVectorsINTEL :: proc(bu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	append(&builder.data, u32(major_shape))
+	assert(major_shape != 0)
 	append(&builder.data, u32(direction))
+	assert(direction != 0)
 	return builder.current_id^
 }
 
@@ -8936,10 +11004,14 @@ OpSubgroupAvcImeGetStreamoutDualReferenceMajorShapeDistortionsINTEL :: proc(buil
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	append(&builder.data, u32(major_shape))
+	assert(major_shape != 0)
 	append(&builder.data, u32(direction))
+	assert(direction != 0)
 	return builder.current_id^
 }
 
@@ -8949,10 +11021,14 @@ OpSubgroupAvcImeGetStreamoutDualReferenceMajorShapeReferenceIdsINTEL :: proc(bui
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	append(&builder.data, u32(major_shape))
+	assert(major_shape != 0)
 	append(&builder.data, u32(direction))
+	assert(direction != 0)
 	return builder.current_id^
 }
 
@@ -8962,9 +11038,12 @@ OpSubgroupAvcImeGetBorderReachedINTEL :: proc(builder: ^Builder, result_type: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(image_select))
+	assert(image_select != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8974,8 +11053,10 @@ OpSubgroupAvcImeGetTruncatedSearchIndicationINTEL :: proc(builder: ^Builder, res
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8985,8 +11066,10 @@ OpSubgroupAvcImeGetUnidirectionalEarlySearchTerminationINTEL :: proc(builder: ^B
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -8996,8 +11079,10 @@ OpSubgroupAvcImeGetWeightingPatternMinimumMotionVectorINTEL :: proc(builder: ^Bu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9007,8 +11092,10 @@ OpSubgroupAvcImeGetWeightingPatternMinimumDistortionINTEL :: proc(builder: ^Buil
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9018,14 +11105,22 @@ OpSubgroupAvcFmeInitializeINTEL :: proc(builder: ^Builder, result_type: Id, src_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_coord))
+	assert(src_coord != 0)
 	append(&builder.data, u32(motion_vectors))
+	assert(motion_vectors != 0)
 	append(&builder.data, u32(major_shapes))
+	assert(major_shapes != 0)
 	append(&builder.data, u32(minor_shapes))
+	assert(minor_shapes != 0)
 	append(&builder.data, u32(direction))
+	assert(direction != 0)
 	append(&builder.data, u32(pixel_resolution))
+	assert(pixel_resolution != 0)
 	append(&builder.data, u32(sad_adjustment))
+	assert(sad_adjustment != 0)
 	return builder.current_id^
 }
 
@@ -9035,15 +11130,24 @@ OpSubgroupAvcBmeInitializeINTEL :: proc(builder: ^Builder, result_type: Id, src_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_coord))
+	assert(src_coord != 0)
 	append(&builder.data, u32(motion_vectors))
+	assert(motion_vectors != 0)
 	append(&builder.data, u32(major_shapes))
+	assert(major_shapes != 0)
 	append(&builder.data, u32(minor_shapes))
+	assert(minor_shapes != 0)
 	append(&builder.data, u32(direction))
+	assert(direction != 0)
 	append(&builder.data, u32(pixel_resolution))
+	assert(pixel_resolution != 0)
 	append(&builder.data, u32(bidirectional_weight))
+	assert(bidirectional_weight != 0)
 	append(&builder.data, u32(sad_adjustment))
+	assert(sad_adjustment != 0)
 	return builder.current_id^
 }
 
@@ -9053,8 +11157,10 @@ OpSubgroupAvcRefConvertToMcePayloadINTEL :: proc(builder: ^Builder, result_type:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9064,8 +11170,10 @@ OpSubgroupAvcRefSetBidirectionalMixDisableINTEL :: proc(builder: ^Builder, resul
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9075,8 +11183,10 @@ OpSubgroupAvcRefSetBilinearFilterEnableINTEL :: proc(builder: ^Builder, result_t
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9086,10 +11196,14 @@ OpSubgroupAvcRefEvaluateWithSingleReferenceINTEL :: proc(builder: ^Builder, resu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(ref_image))
+	assert(ref_image != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9099,11 +11213,16 @@ OpSubgroupAvcRefEvaluateWithDualReferenceINTEL :: proc(builder: ^Builder, result
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(fwd_ref_image))
+	assert(fwd_ref_image != 0)
 	append(&builder.data, u32(bwd_ref_image))
+	assert(bwd_ref_image != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9113,10 +11232,14 @@ OpSubgroupAvcRefEvaluateWithMultiReferenceINTEL :: proc(builder: ^Builder, resul
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(packed_reference_ids))
+	assert(packed_reference_ids != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9126,11 +11249,16 @@ OpSubgroupAvcRefEvaluateWithMultiReferenceInterlacedINTEL :: proc(builder: ^Buil
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(packed_reference_ids))
+	assert(packed_reference_ids != 0)
 	append(&builder.data, u32(packed_reference_field_polarities))
+	assert(packed_reference_field_polarities != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9140,8 +11268,10 @@ OpSubgroupAvcRefConvertToMceResultINTEL :: proc(builder: ^Builder, result_type: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9151,8 +11281,10 @@ OpSubgroupAvcSicInitializeINTEL :: proc(builder: ^Builder, result_type: Id, src_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_coord))
+	assert(src_coord != 0)
 	return builder.current_id^
 }
 
@@ -9162,13 +11294,20 @@ OpSubgroupAvcSicConfigureSkcINTEL :: proc(builder: ^Builder, result_type: Id, sk
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(skip_block_partition_type))
+	assert(skip_block_partition_type != 0)
 	append(&builder.data, u32(skip_motion_vector_mask))
+	assert(skip_motion_vector_mask != 0)
 	append(&builder.data, u32(motion_vectors))
+	assert(motion_vectors != 0)
 	append(&builder.data, u32(bidirectional_weight))
+	assert(bidirectional_weight != 0)
 	append(&builder.data, u32(sad_adjustment))
+	assert(sad_adjustment != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9178,15 +11317,24 @@ OpSubgroupAvcSicConfigureIpeLumaINTEL :: proc(builder: ^Builder, result_type: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(luma_intra_partition_mask))
+	assert(luma_intra_partition_mask != 0)
 	append(&builder.data, u32(intra_neighbour_availabilty))
+	assert(intra_neighbour_availabilty != 0)
 	append(&builder.data, u32(left_edge_luma_pixels))
+	assert(left_edge_luma_pixels != 0)
 	append(&builder.data, u32(upper_left_corner_luma_pixel))
+	assert(upper_left_corner_luma_pixel != 0)
 	append(&builder.data, u32(upper_edge_luma_pixels))
+	assert(upper_edge_luma_pixels != 0)
 	append(&builder.data, u32(upper_right_edge_luma_pixels))
+	assert(upper_right_edge_luma_pixels != 0)
 	append(&builder.data, u32(sad_adjustment))
+	assert(sad_adjustment != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9196,18 +11344,30 @@ OpSubgroupAvcSicConfigureIpeLumaChromaINTEL :: proc(builder: ^Builder, result_ty
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(luma_intra_partition_mask))
+	assert(luma_intra_partition_mask != 0)
 	append(&builder.data, u32(intra_neighbour_availabilty))
+	assert(intra_neighbour_availabilty != 0)
 	append(&builder.data, u32(left_edge_luma_pixels))
+	assert(left_edge_luma_pixels != 0)
 	append(&builder.data, u32(upper_left_corner_luma_pixel))
+	assert(upper_left_corner_luma_pixel != 0)
 	append(&builder.data, u32(upper_edge_luma_pixels))
+	assert(upper_edge_luma_pixels != 0)
 	append(&builder.data, u32(upper_right_edge_luma_pixels))
+	assert(upper_right_edge_luma_pixels != 0)
 	append(&builder.data, u32(left_edge_chroma_pixels))
+	assert(left_edge_chroma_pixels != 0)
 	append(&builder.data, u32(upper_left_corner_chroma_pixel))
+	assert(upper_left_corner_chroma_pixel != 0)
 	append(&builder.data, u32(upper_edge_chroma_pixels))
+	assert(upper_edge_chroma_pixels != 0)
 	append(&builder.data, u32(sad_adjustment))
+	assert(sad_adjustment != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9217,9 +11377,12 @@ OpSubgroupAvcSicGetMotionVectorMaskINTEL :: proc(builder: ^Builder, result_type:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(skip_block_partition_type))
+	assert(skip_block_partition_type != 0)
 	append(&builder.data, u32(direction))
+	assert(direction != 0)
 	return builder.current_id^
 }
 
@@ -9229,8 +11392,10 @@ OpSubgroupAvcSicConvertToMcePayloadINTEL :: proc(builder: ^Builder, result_type:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9240,9 +11405,12 @@ OpSubgroupAvcSicSetIntraLumaShapePenaltyINTEL :: proc(builder: ^Builder, result_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(packed_shape_penalty))
+	assert(packed_shape_penalty != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9252,11 +11420,16 @@ OpSubgroupAvcSicSetIntraLumaModeCostFunctionINTEL :: proc(builder: ^Builder, res
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(luma_mode_penalty))
+	assert(luma_mode_penalty != 0)
 	append(&builder.data, u32(luma_packed_neighbor_modes))
+	assert(luma_packed_neighbor_modes != 0)
 	append(&builder.data, u32(luma_packed_non_dc_penalty))
+	assert(luma_packed_non_dc_penalty != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9266,9 +11439,12 @@ OpSubgroupAvcSicSetIntraChromaModeCostFunctionINTEL :: proc(builder: ^Builder, r
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(chroma_mode_base_penalty))
+	assert(chroma_mode_base_penalty != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9278,8 +11454,10 @@ OpSubgroupAvcSicSetBilinearFilterEnableINTEL :: proc(builder: ^Builder, result_t
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9289,9 +11467,12 @@ OpSubgroupAvcSicSetSkcForwardTransformEnableINTEL :: proc(builder: ^Builder, res
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(packed_sad_coefficients))
+	assert(packed_sad_coefficients != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9301,9 +11482,12 @@ OpSubgroupAvcSicSetBlockBasedRawSkipSadINTEL :: proc(builder: ^Builder, result_t
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(block_based_skip_type))
+	assert(block_based_skip_type != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9313,9 +11497,12 @@ OpSubgroupAvcSicEvaluateIpeINTEL :: proc(builder: ^Builder, result_type: Id, src
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9325,10 +11512,14 @@ OpSubgroupAvcSicEvaluateWithSingleReferenceINTEL :: proc(builder: ^Builder, resu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(ref_image))
+	assert(ref_image != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9338,11 +11529,16 @@ OpSubgroupAvcSicEvaluateWithDualReferenceINTEL :: proc(builder: ^Builder, result
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(fwd_ref_image))
+	assert(fwd_ref_image != 0)
 	append(&builder.data, u32(bwd_ref_image))
+	assert(bwd_ref_image != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9352,10 +11548,14 @@ OpSubgroupAvcSicEvaluateWithMultiReferenceINTEL :: proc(builder: ^Builder, resul
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(packed_reference_ids))
+	assert(packed_reference_ids != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9365,11 +11565,16 @@ OpSubgroupAvcSicEvaluateWithMultiReferenceInterlacedINTEL :: proc(builder: ^Buil
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(src_image))
+	assert(src_image != 0)
 	append(&builder.data, u32(packed_reference_ids))
+	assert(packed_reference_ids != 0)
 	append(&builder.data, u32(packed_reference_field_polarities))
+	assert(packed_reference_field_polarities != 0)
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9379,8 +11584,10 @@ OpSubgroupAvcSicConvertToMceResultINTEL :: proc(builder: ^Builder, result_type: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9390,8 +11597,10 @@ OpSubgroupAvcSicGetIpeLumaShapeINTEL :: proc(builder: ^Builder, result_type: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9401,8 +11610,10 @@ OpSubgroupAvcSicGetBestIpeLumaDistortionINTEL :: proc(builder: ^Builder, result_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9412,8 +11623,10 @@ OpSubgroupAvcSicGetBestIpeChromaDistortionINTEL :: proc(builder: ^Builder, resul
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9423,8 +11636,10 @@ OpSubgroupAvcSicGetPackedIpeLumaModesINTEL :: proc(builder: ^Builder, result_typ
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9434,8 +11649,10 @@ OpSubgroupAvcSicGetIpeChromaModeINTEL :: proc(builder: ^Builder, result_type: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9445,8 +11662,10 @@ OpSubgroupAvcSicGetPackedSkcLumaCountThresholdINTEL :: proc(builder: ^Builder, r
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9456,8 +11675,10 @@ OpSubgroupAvcSicGetPackedSkcLumaSumThresholdINTEL :: proc(builder: ^Builder, res
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9467,8 +11688,10 @@ OpSubgroupAvcSicGetInterRawSadsINTEL :: proc(builder: ^Builder, result_type: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(payload))
+	assert(payload != 0)
 	return builder.current_id^
 }
 
@@ -9478,8 +11701,10 @@ OpVariableLengthArrayINTEL :: proc(builder: ^Builder, result_type: Id, length: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(length))
+	assert(length != 0)
 	return builder.current_id^
 }
 
@@ -9489,6 +11714,7 @@ OpSaveMemoryINTEL :: proc(builder: ^Builder, result_type: Id) -> (result: Id) {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	return builder.current_id^
 }
@@ -9499,6 +11725,7 @@ OpRestoreMemoryINTEL :: proc(builder: ^Builder, ptr: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(ptr))
+	assert(ptr != 0)
 }
 
 OpArbitraryFloatSinCosPiINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u32, mresult: u32, subnormal: u32, rounding: u32, roundingaccuracy: u32) -> (result: Id) {
@@ -9507,8 +11734,10 @@ OpArbitraryFloatSinCosPiINTEL :: proc(builder: ^Builder, result_type: Id, a: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9523,8 +11752,10 @@ OpArbitraryFloatCastINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9539,8 +11770,10 @@ OpArbitraryFloatCastFromIntINTEL :: proc(builder: ^Builder, result_type: Id, a: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(fromsign))
 	append(&builder.data, u32(subnormal))
@@ -9555,8 +11788,10 @@ OpArbitraryFloatCastToIntINTEL :: proc(builder: ^Builder, result_type: Id, a: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(tosign))
 	append(&builder.data, u32(subnormal))
@@ -9571,10 +11806,13 @@ OpArbitraryFloatAddINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(mb))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9589,10 +11827,13 @@ OpArbitraryFloatSubINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(mb))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9607,10 +11848,13 @@ OpArbitraryFloatMulINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(mb))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9625,10 +11869,13 @@ OpArbitraryFloatDivINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(mb))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9643,10 +11890,13 @@ OpArbitraryFloatGTINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(mb))
 	return builder.current_id^
 }
@@ -9657,10 +11907,13 @@ OpArbitraryFloatGEINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(mb))
 	return builder.current_id^
 }
@@ -9671,10 +11924,13 @@ OpArbitraryFloatLTINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(mb))
 	return builder.current_id^
 }
@@ -9685,10 +11941,13 @@ OpArbitraryFloatLEINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(mb))
 	return builder.current_id^
 }
@@ -9699,10 +11958,13 @@ OpArbitraryFloatEQINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: u
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(mb))
 	return builder.current_id^
 }
@@ -9713,8 +11975,10 @@ OpArbitraryFloatRecipINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9729,8 +11993,10 @@ OpArbitraryFloatRSqrtINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9745,8 +12011,10 @@ OpArbitraryFloatCbrtINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9761,10 +12029,13 @@ OpArbitraryFloatHypotINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(mb))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9779,8 +12050,10 @@ OpArbitraryFloatSqrtINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9795,8 +12068,10 @@ OpArbitraryFloatLogINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9811,8 +12086,10 @@ OpArbitraryFloatLog2INTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9827,8 +12104,10 @@ OpArbitraryFloatLog10INTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9843,8 +12122,10 @@ OpArbitraryFloatLog1pINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9859,8 +12140,10 @@ OpArbitraryFloatExpINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9875,8 +12158,10 @@ OpArbitraryFloatExp2INTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9891,8 +12176,10 @@ OpArbitraryFloatExp10INTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9907,8 +12194,10 @@ OpArbitraryFloatExpm1INTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9923,8 +12212,10 @@ OpArbitraryFloatSinINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9939,8 +12230,10 @@ OpArbitraryFloatCosINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9955,8 +12248,10 @@ OpArbitraryFloatSinCosINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, m
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9971,8 +12266,10 @@ OpArbitraryFloatSinPiINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -9987,8 +12284,10 @@ OpArbitraryFloatCosPiINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -10003,8 +12302,10 @@ OpArbitraryFloatASinINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -10019,8 +12320,10 @@ OpArbitraryFloatASinPiINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, m
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -10035,8 +12338,10 @@ OpArbitraryFloatACosINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, m1:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(m1))
 	append(&builder.data, u32(mout))
 	append(&builder.data, u32(enablesubnormals))
@@ -10051,8 +12356,10 @@ OpArbitraryFloatACosPiINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, m
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -10067,8 +12374,10 @@ OpArbitraryFloatATanINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -10083,8 +12392,10 @@ OpArbitraryFloatATanPiINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, m
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -10099,10 +12410,13 @@ OpArbitraryFloatATan2INTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(mb))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -10117,10 +12431,13 @@ OpArbitraryFloatPowINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(mb))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -10135,10 +12452,13 @@ OpArbitraryFloatPowRINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(mb))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -10153,10 +12473,13 @@ OpArbitraryFloatPowNINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, ma:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(ma))
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(signofb))
 	append(&builder.data, u32(mresult))
 	append(&builder.data, u32(subnormal))
@@ -10170,7 +12493,9 @@ OpLoopControlINTEL :: proc(builder: ^Builder, loop_control_parameters: ..u32) ->
 	append(&builder.data, u32(Op.LoopControlINTEL))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	for loop_control_parameters in loop_control_parameters do append(&builder.data, u32(loop_control_parameters))
+	for loop_control_parameters in loop_control_parameters {
+		append(&builder.data, u32(loop_control_parameters))
+	}
 }
 
 OpAliasDomainDeclINTEL :: proc(builder: ^Builder, name: Maybe(Id) = nil) -> (result: Id) {
@@ -10179,7 +12504,10 @@ OpAliasDomainDeclINTEL :: proc(builder: ^Builder, name: Maybe(Id) = nil) -> (res
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, next_id(builder))
-	if name, ok := name.?; ok do append(&builder.data, u32(name))
+	if name, ok := name.?; ok {
+		append(&builder.data, u32(name))
+		assert(name != 0)
+	}
 	return builder.current_id^
 }
 
@@ -10190,7 +12518,11 @@ OpAliasScopeDeclINTEL :: proc(builder: ^Builder, alias_domain: Id, name: Maybe(I
 
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(alias_domain))
-	if name, ok := name.?; ok do append(&builder.data, u32(name))
+	assert(alias_domain != 0)
+	if name, ok := name.?; ok {
+		append(&builder.data, u32(name))
+		assert(name != 0)
+	}
 	return builder.current_id^
 }
 
@@ -10200,7 +12532,10 @@ OpAliasScopeListDeclINTEL :: proc(builder: ^Builder, _operand_1: ..Id) -> (resul
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, next_id(builder))
-	for _operand_1 in _operand_1 do append(&builder.data, u32(_operand_1))
+	for _operand_1 in _operand_1 {
+		append(&builder.data, u32(_operand_1))
+		assert(_operand_1 != 0)
+	}
 	return builder.current_id^
 }
 
@@ -10210,8 +12545,10 @@ OpFixedSqrtINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(input))
+	assert(input != 0)
 	append(&builder.data, u32(s))
 	append(&builder.data, u32(i))
 	append(&builder.data, u32(ri))
@@ -10226,8 +12563,10 @@ OpFixedRecipINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(input))
+	assert(input != 0)
 	append(&builder.data, u32(s))
 	append(&builder.data, u32(i))
 	append(&builder.data, u32(ri))
@@ -10242,8 +12581,10 @@ OpFixedRsqrtINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(input))
+	assert(input != 0)
 	append(&builder.data, u32(s))
 	append(&builder.data, u32(i))
 	append(&builder.data, u32(ri))
@@ -10258,8 +12599,10 @@ OpFixedSinINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, i
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(input))
+	assert(input != 0)
 	append(&builder.data, u32(s))
 	append(&builder.data, u32(i))
 	append(&builder.data, u32(ri))
@@ -10274,8 +12617,10 @@ OpFixedCosINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, i
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(input))
+	assert(input != 0)
 	append(&builder.data, u32(s))
 	append(&builder.data, u32(i))
 	append(&builder.data, u32(ri))
@@ -10290,8 +12635,10 @@ OpFixedSinCosINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(input))
+	assert(input != 0)
 	append(&builder.data, u32(s))
 	append(&builder.data, u32(i))
 	append(&builder.data, u32(ri))
@@ -10306,8 +12653,10 @@ OpFixedSinPiINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(input))
+	assert(input != 0)
 	append(&builder.data, u32(s))
 	append(&builder.data, u32(i))
 	append(&builder.data, u32(ri))
@@ -10322,8 +12671,10 @@ OpFixedCosPiINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(input))
+	assert(input != 0)
 	append(&builder.data, u32(s))
 	append(&builder.data, u32(i))
 	append(&builder.data, u32(ri))
@@ -10338,8 +12689,10 @@ OpFixedSinCosPiINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(input))
+	assert(input != 0)
 	append(&builder.data, u32(s))
 	append(&builder.data, u32(i))
 	append(&builder.data, u32(ri))
@@ -10354,8 +12707,10 @@ OpFixedLogINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, i
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(input))
+	assert(input != 0)
 	append(&builder.data, u32(s))
 	append(&builder.data, u32(i))
 	append(&builder.data, u32(ri))
@@ -10370,8 +12725,10 @@ OpFixedExpINTEL :: proc(builder: ^Builder, result_type: Id, input: Id, s: u32, i
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(input))
+	assert(input != 0)
 	append(&builder.data, u32(s))
 	append(&builder.data, u32(i))
 	append(&builder.data, u32(ri))
@@ -10386,8 +12743,10 @@ OpPtrCastToCrossWorkgroupINTEL :: proc(builder: ^Builder, result_type: Id, point
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	return builder.current_id^
 }
 
@@ -10397,8 +12756,10 @@ OpCrossWorkgroupCastToPtrINTEL :: proc(builder: ^Builder, result_type: Id, point
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	return builder.current_id^
 }
 
@@ -10408,9 +12769,12 @@ OpReadPipeBlockingINTEL :: proc(builder: ^Builder, result_type: Id, packet_size:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 	return builder.current_id^
 }
 
@@ -10420,9 +12784,12 @@ OpWritePipeBlockingINTEL :: proc(builder: ^Builder, result_type: Id, packet_size
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(packet_size))
+	assert(packet_size != 0)
 	append(&builder.data, u32(packet_alignment))
+	assert(packet_alignment != 0)
 	return builder.current_id^
 }
 
@@ -10432,8 +12799,10 @@ OpFPGARegINTEL :: proc(builder: ^Builder, result_type: Id, input: Id) -> (result
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(input))
+	assert(input != 0)
 	return builder.current_id^
 }
 
@@ -10443,8 +12812,10 @@ OpRayQueryGetRayTMinKHR :: proc(builder: ^Builder, result_type: Id, rayquery: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	return builder.current_id^
 }
 
@@ -10454,8 +12825,10 @@ OpRayQueryGetRayFlagsKHR :: proc(builder: ^Builder, result_type: Id, rayquery: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	return builder.current_id^
 }
 
@@ -10465,9 +12838,12 @@ OpRayQueryGetIntersectionTKHR :: proc(builder: ^Builder, result_type: Id, rayque
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -10477,9 +12853,12 @@ OpRayQueryGetIntersectionInstanceCustomIndexKHR :: proc(builder: ^Builder, resul
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -10489,9 +12868,12 @@ OpRayQueryGetIntersectionInstanceIdKHR :: proc(builder: ^Builder, result_type: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -10501,9 +12883,12 @@ OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR :: proc(build
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -10513,9 +12898,12 @@ OpRayQueryGetIntersectionGeometryIndexKHR :: proc(builder: ^Builder, result_type
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -10525,9 +12913,12 @@ OpRayQueryGetIntersectionPrimitiveIndexKHR :: proc(builder: ^Builder, result_typ
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -10537,9 +12928,12 @@ OpRayQueryGetIntersectionBarycentricsKHR :: proc(builder: ^Builder, result_type:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -10549,9 +12943,12 @@ OpRayQueryGetIntersectionFrontFaceKHR :: proc(builder: ^Builder, result_type: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -10561,8 +12958,10 @@ OpRayQueryGetIntersectionCandidateAABBOpaqueKHR :: proc(builder: ^Builder, resul
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	return builder.current_id^
 }
 
@@ -10572,9 +12971,12 @@ OpRayQueryGetIntersectionObjectRayDirectionKHR :: proc(builder: ^Builder, result
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -10584,9 +12986,12 @@ OpRayQueryGetIntersectionObjectRayOriginKHR :: proc(builder: ^Builder, result_ty
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -10596,8 +13001,10 @@ OpRayQueryGetWorldRayDirectionKHR :: proc(builder: ^Builder, result_type: Id, ra
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	return builder.current_id^
 }
 
@@ -10607,8 +13014,10 @@ OpRayQueryGetWorldRayOriginKHR :: proc(builder: ^Builder, result_type: Id, rayqu
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	return builder.current_id^
 }
 
@@ -10618,9 +13027,12 @@ OpRayQueryGetIntersectionObjectToWorldKHR :: proc(builder: ^Builder, result_type
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -10630,9 +13042,12 @@ OpRayQueryGetIntersectionWorldToObjectKHR :: proc(builder: ^Builder, result_type
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(rayquery))
+	assert(rayquery != 0)
 	append(&builder.data, u32(intersection))
+	assert(intersection != 0)
 	return builder.current_id^
 }
 
@@ -10642,11 +13057,16 @@ OpAtomicFAddEXT :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(pointer))
+	assert(pointer != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 	append(&builder.data, u32(value))
+	assert(value != 0)
 	return builder.current_id^
 }
 
@@ -10665,7 +13085,10 @@ OpTypeStructContinuedINTEL :: proc(builder: ^Builder, _operand_0: ..Id) -> () {
 	append(&builder.data, u32(Op.TypeStructContinuedINTEL))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	for _operand_0 in _operand_0 do append(&builder.data, u32(_operand_0))
+	for _operand_0 in _operand_0 {
+		append(&builder.data, u32(_operand_0))
+		assert(_operand_0 != 0)
+	}
 }
 
 OpConstantCompositeContinuedINTEL :: proc(builder: ^Builder, constituents: ..Id) -> () {
@@ -10673,7 +13096,10 @@ OpConstantCompositeContinuedINTEL :: proc(builder: ^Builder, constituents: ..Id)
 	append(&builder.data, u32(Op.ConstantCompositeContinuedINTEL))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	for constituents in constituents do append(&builder.data, u32(constituents))
+	for constituents in constituents {
+		append(&builder.data, u32(constituents))
+		assert(constituents != 0)
+	}
 }
 
 OpSpecConstantCompositeContinuedINTEL :: proc(builder: ^Builder, constituents: ..Id) -> () {
@@ -10681,7 +13107,10 @@ OpSpecConstantCompositeContinuedINTEL :: proc(builder: ^Builder, constituents: .
 	append(&builder.data, u32(Op.SpecConstantCompositeContinuedINTEL))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
-	for constituents in constituents do append(&builder.data, u32(constituents))
+	for constituents in constituents {
+		append(&builder.data, u32(constituents))
+		assert(constituents != 0)
+	}
 }
 
 OpCompositeConstructContinuedINTEL :: proc(builder: ^Builder, result_type: Id, constituents: ..Id) -> (result: Id) {
@@ -10690,8 +13119,12 @@ OpCompositeConstructContinuedINTEL :: proc(builder: ^Builder, result_type: Id, c
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
-	for constituents in constituents do append(&builder.data, u32(constituents))
+	for constituents in constituents {
+		append(&builder.data, u32(constituents))
+		assert(constituents != 0)
+	}
 	return builder.current_id^
 }
 
@@ -10701,8 +13134,10 @@ OpConvertFToBF16INTEL :: proc(builder: ^Builder, result_type: Id, float_value: I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(float_value))
+	assert(float_value != 0)
 	return builder.current_id^
 }
 
@@ -10712,8 +13147,10 @@ OpConvertBF16ToFINTEL :: proc(builder: ^Builder, result_type: Id, bfloat16_value
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(bfloat16_value))
+	assert(bfloat16_value != 0)
 	return builder.current_id^
 }
 
@@ -10723,8 +13160,11 @@ OpControlBarrierArriveINTEL :: proc(builder: ^Builder, execution: Id, memory: Id
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 }
 
 OpControlBarrierWaitINTEL :: proc(builder: ^Builder, execution: Id, memory: Id, semantics: Id) -> () {
@@ -10733,8 +13173,11 @@ OpControlBarrierWaitINTEL :: proc(builder: ^Builder, execution: Id, memory: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, u32(memory))
+	assert(memory != 0)
 	append(&builder.data, u32(semantics))
+	assert(semantics != 0)
 }
 
 OpArithmeticFenceEXT :: proc(builder: ^Builder, result_type: Id, target: Id) -> (result: Id) {
@@ -10743,8 +13186,10 @@ OpArithmeticFenceEXT :: proc(builder: ^Builder, result_type: Id, target: Id) -> 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(target))
+	assert(target != 0)
 	return builder.current_id^
 }
 
@@ -10754,8 +13199,10 @@ OpTaskSequenceCreateINTEL :: proc(builder: ^Builder, result_type: Id, function: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(function))
+	assert(function != 0)
 	append(&builder.data, u32(pipelined))
 	append(&builder.data, u32(usestallenableclusters))
 	append(&builder.data, u32(getcapacity))
@@ -10769,7 +13216,11 @@ OpTaskSequenceAsyncINTEL :: proc(builder: ^Builder, sequence: Id, arguments: ..I
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(sequence))
-	for arguments in arguments do append(&builder.data, u32(arguments))
+	assert(sequence != 0)
+	for arguments in arguments {
+		append(&builder.data, u32(arguments))
+		assert(arguments != 0)
+	}
 }
 
 OpTaskSequenceGetINTEL :: proc(builder: ^Builder, result_type: Id, sequence: Id) -> (result: Id) {
@@ -10778,8 +13229,10 @@ OpTaskSequenceGetINTEL :: proc(builder: ^Builder, result_type: Id, sequence: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(sequence))
+	assert(sequence != 0)
 	return builder.current_id^
 }
 
@@ -10789,6 +13242,7 @@ OpTaskSequenceReleaseINTEL :: proc(builder: ^Builder, sequence: Id) -> () {
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(sequence))
+	assert(sequence != 0)
 }
 
 OpTypeTaskSequenceINTEL :: proc(builder: ^Builder) -> (result: Id) {
@@ -10806,8 +13260,12 @@ OpSubgroupBlockPrefetchINTEL :: proc(builder: ^Builder, ptr: Id, numbytes: Id, _
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(ptr))
+	assert(ptr != 0)
 	append(&builder.data, u32(numbytes))
-	if _operand_2, ok := _operand_2.?; ok do append(&builder.data, transmute(u32)_operand_2)
+	assert(numbytes != 0)
+	if _operand_2, ok := _operand_2.?; ok {
+		append(&builder.data, transmute(u32)_operand_2)
+	}
 }
 
 OpSubgroup2DBlockLoadINTEL :: proc(builder: ^Builder, element_size: Id, block_width: Id, block_height: Id, block_count: Id, src_base_pointer: Id, memory_width: Id, memory_height: Id, memory_pitch: Id, coordinate: Id, dst_pointer: Id) -> () {
@@ -10816,15 +13274,25 @@ OpSubgroup2DBlockLoadINTEL :: proc(builder: ^Builder, element_size: Id, block_wi
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(element_size))
+	assert(element_size != 0)
 	append(&builder.data, u32(block_width))
+	assert(block_width != 0)
 	append(&builder.data, u32(block_height))
+	assert(block_height != 0)
 	append(&builder.data, u32(block_count))
+	assert(block_count != 0)
 	append(&builder.data, u32(src_base_pointer))
+	assert(src_base_pointer != 0)
 	append(&builder.data, u32(memory_width))
+	assert(memory_width != 0)
 	append(&builder.data, u32(memory_height))
+	assert(memory_height != 0)
 	append(&builder.data, u32(memory_pitch))
+	assert(memory_pitch != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(dst_pointer))
+	assert(dst_pointer != 0)
 }
 
 OpSubgroup2DBlockLoadTransformINTEL :: proc(builder: ^Builder, element_size: Id, block_width: Id, block_height: Id, block_count: Id, src_base_pointer: Id, memory_width: Id, memory_height: Id, memory_pitch: Id, coordinate: Id, dst_pointer: Id) -> () {
@@ -10833,15 +13301,25 @@ OpSubgroup2DBlockLoadTransformINTEL :: proc(builder: ^Builder, element_size: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(element_size))
+	assert(element_size != 0)
 	append(&builder.data, u32(block_width))
+	assert(block_width != 0)
 	append(&builder.data, u32(block_height))
+	assert(block_height != 0)
 	append(&builder.data, u32(block_count))
+	assert(block_count != 0)
 	append(&builder.data, u32(src_base_pointer))
+	assert(src_base_pointer != 0)
 	append(&builder.data, u32(memory_width))
+	assert(memory_width != 0)
 	append(&builder.data, u32(memory_height))
+	assert(memory_height != 0)
 	append(&builder.data, u32(memory_pitch))
+	assert(memory_pitch != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(dst_pointer))
+	assert(dst_pointer != 0)
 }
 
 OpSubgroup2DBlockLoadTransposeINTEL :: proc(builder: ^Builder, element_size: Id, block_width: Id, block_height: Id, block_count: Id, src_base_pointer: Id, memory_width: Id, memory_height: Id, memory_pitch: Id, coordinate: Id, dst_pointer: Id) -> () {
@@ -10850,15 +13328,25 @@ OpSubgroup2DBlockLoadTransposeINTEL :: proc(builder: ^Builder, element_size: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(element_size))
+	assert(element_size != 0)
 	append(&builder.data, u32(block_width))
+	assert(block_width != 0)
 	append(&builder.data, u32(block_height))
+	assert(block_height != 0)
 	append(&builder.data, u32(block_count))
+	assert(block_count != 0)
 	append(&builder.data, u32(src_base_pointer))
+	assert(src_base_pointer != 0)
 	append(&builder.data, u32(memory_width))
+	assert(memory_width != 0)
 	append(&builder.data, u32(memory_height))
+	assert(memory_height != 0)
 	append(&builder.data, u32(memory_pitch))
+	assert(memory_pitch != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 	append(&builder.data, u32(dst_pointer))
+	assert(dst_pointer != 0)
 }
 
 OpSubgroup2DBlockPrefetchINTEL :: proc(builder: ^Builder, element_size: Id, block_width: Id, block_height: Id, block_count: Id, src_base_pointer: Id, memory_width: Id, memory_height: Id, memory_pitch: Id, coordinate: Id) -> () {
@@ -10867,14 +13355,23 @@ OpSubgroup2DBlockPrefetchINTEL :: proc(builder: ^Builder, element_size: Id, bloc
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(element_size))
+	assert(element_size != 0)
 	append(&builder.data, u32(block_width))
+	assert(block_width != 0)
 	append(&builder.data, u32(block_height))
+	assert(block_height != 0)
 	append(&builder.data, u32(block_count))
+	assert(block_count != 0)
 	append(&builder.data, u32(src_base_pointer))
+	assert(src_base_pointer != 0)
 	append(&builder.data, u32(memory_width))
+	assert(memory_width != 0)
 	append(&builder.data, u32(memory_height))
+	assert(memory_height != 0)
 	append(&builder.data, u32(memory_pitch))
+	assert(memory_pitch != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 }
 
 OpSubgroup2DBlockStoreINTEL :: proc(builder: ^Builder, element_size: Id, block_width: Id, block_height: Id, block_count: Id, src_pointer: Id, dst_base_pointer: Id, memory_width: Id, memory_height: Id, memory_pitch: Id, coordinate: Id) -> () {
@@ -10883,15 +13380,25 @@ OpSubgroup2DBlockStoreINTEL :: proc(builder: ^Builder, element_size: Id, block_w
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(element_size))
+	assert(element_size != 0)
 	append(&builder.data, u32(block_width))
+	assert(block_width != 0)
 	append(&builder.data, u32(block_height))
+	assert(block_height != 0)
 	append(&builder.data, u32(block_count))
+	assert(block_count != 0)
 	append(&builder.data, u32(src_pointer))
+	assert(src_pointer != 0)
 	append(&builder.data, u32(dst_base_pointer))
+	assert(dst_base_pointer != 0)
 	append(&builder.data, u32(memory_width))
+	assert(memory_width != 0)
 	append(&builder.data, u32(memory_height))
+	assert(memory_height != 0)
 	append(&builder.data, u32(memory_pitch))
+	assert(memory_pitch != 0)
 	append(&builder.data, u32(coordinate))
+	assert(coordinate != 0)
 }
 
 OpSubgroupMatrixMultiplyAccumulateINTEL :: proc(builder: ^Builder, result_type: Id, k_dim: Id, matrix_a: Id, matrix_b: Id, matrix_c: Id, _operand_6: Maybe(MatrixMultiplyAccumulateOperands) = nil) -> (result: Id) {
@@ -10900,12 +13407,19 @@ OpSubgroupMatrixMultiplyAccumulateINTEL :: proc(builder: ^Builder, result_type: 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(k_dim))
+	assert(k_dim != 0)
 	append(&builder.data, u32(matrix_a))
+	assert(matrix_a != 0)
 	append(&builder.data, u32(matrix_b))
+	assert(matrix_b != 0)
 	append(&builder.data, u32(matrix_c))
-	if _operand_6, ok := _operand_6.?; ok do append(&builder.data, transmute(u32)_operand_6)
+	assert(matrix_c != 0)
+	if _operand_6, ok := _operand_6.?; ok {
+		append(&builder.data, transmute(u32)_operand_6)
+	}
 	return builder.current_id^
 }
 
@@ -10915,11 +13429,16 @@ OpBitwiseFunctionINTEL :: proc(builder: ^Builder, result_type: Id, a: Id, b: Id,
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(a))
+	assert(a != 0)
 	append(&builder.data, u32(b))
+	assert(b != 0)
 	append(&builder.data, u32(c))
+	assert(c != 0)
 	append(&builder.data, u32(lutindex))
+	assert(lutindex != 0)
 	return builder.current_id^
 }
 
@@ -10929,9 +13448,12 @@ OpUntypedVariableLengthArrayINTEL :: proc(builder: ^Builder, result_type: Id, el
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(element_type))
+	assert(element_type != 0)
 	append(&builder.data, u32(length))
+	assert(length != 0)
 	return builder.current_id^
 }
 
@@ -10941,6 +13463,7 @@ OpConditionalExtensionINTEL :: proc(builder: ^Builder, condition: Id, name: stri
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(condition))
+	assert(condition != 0)
 	write_string(&builder.data, name)
 }
 
@@ -10950,10 +13473,15 @@ OpConditionalEntryPointINTEL :: proc(builder: ^Builder, condition: Id, _operand_
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(condition))
+	assert(condition != 0)
 	append(&builder.data, transmute(u32)_operand_1)
 	append(&builder.data, u32(entry_point))
+	assert(entry_point != 0)
 	write_string(&builder.data, name)
-	for interface in interface do append(&builder.data, u32(interface))
+	for interface in interface {
+		append(&builder.data, u32(interface))
+		assert(interface != 0)
+	}
 }
 
 OpConditionalCapabilityINTEL :: proc(builder: ^Builder, condition: Id, capability: Capability) -> () {
@@ -10962,6 +13490,7 @@ OpConditionalCapabilityINTEL :: proc(builder: ^Builder, condition: Id, capabilit
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(condition))
+	assert(condition != 0)
 	append(&builder.data, transmute(u32)capability)
 }
 
@@ -10971,9 +13500,12 @@ OpSpecConstantTargetINTEL :: proc(builder: ^Builder, result_type: Id, target: u3
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(target))
-	for features in features do append(&builder.data, u32(features))
+	for features in features {
+		append(&builder.data, u32(features))
+	}
 	return builder.current_id^
 }
 
@@ -10983,6 +13515,7 @@ OpSpecConstantArchitectureINTEL :: proc(builder: ^Builder, result_type: Id, cate
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(category))
 	append(&builder.data, u32(family))
@@ -10997,8 +13530,11 @@ OpSpecConstantCapabilitiesINTEL :: proc(builder: ^Builder, result_type: Id, capa
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
-	for capabilities in capabilities do append(&builder.data, transmute(u32)capabilities)
+	for capabilities in capabilities {
+		append(&builder.data, transmute(u32)capabilities)
+	}
 	return builder.current_id^
 }
 
@@ -11008,8 +13544,12 @@ OpConditionalCopyObjectINTEL :: proc(builder: ^Builder, result_type: Id, _operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
-	for _operand_2 in _operand_2 do append(&builder.data, u32(_operand_2))
+	for _operand_2 in _operand_2 {
+		append(&builder.data, u32(_operand_2))
+		assert(_operand_2 != 0)
+	}
 	return builder.current_id^
 }
 
@@ -11019,10 +13559,13 @@ OpGroupIMulKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, operat
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -11032,10 +13575,13 @@ OpGroupFMulKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, operat
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -11045,10 +13591,13 @@ OpGroupBitwiseAndKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -11058,10 +13607,13 @@ OpGroupBitwiseOrKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, o
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -11071,10 +13623,13 @@ OpGroupBitwiseXorKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -11084,10 +13639,13 @@ OpGroupLogicalAndKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -11097,10 +13655,13 @@ OpGroupLogicalOrKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, o
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -11110,10 +13671,13 @@ OpGroupLogicalXorKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(execution))
+	assert(execution != 0)
 	append(&builder.data, transmute(u32)operation)
 	append(&builder.data, u32(x))
+	assert(x != 0)
 	return builder.current_id^
 }
 
@@ -11123,8 +13687,10 @@ OpRoundFToTF32INTEL :: proc(builder: ^Builder, result_type: Id, float_value: Id)
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(float_value))
+	assert(float_value != 0)
 	return builder.current_id^
 }
 
@@ -11134,11 +13700,15 @@ OpMaskedGatherINTEL :: proc(builder: ^Builder, result_type: Id, ptrvector: Id, a
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(ptrvector))
+	assert(ptrvector != 0)
 	append(&builder.data, u32(alignment))
 	append(&builder.data, u32(mask))
+	assert(mask != 0)
 	append(&builder.data, u32(fillempty))
+	assert(fillempty != 0)
 	return builder.current_id^
 }
 
@@ -11148,9 +13718,12 @@ OpMaskedScatterINTEL :: proc(builder: ^Builder, inputvector: Id, ptrvector: Id, 
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(inputvector))
+	assert(inputvector != 0)
 	append(&builder.data, u32(ptrvector))
+	assert(ptrvector != 0)
 	append(&builder.data, u32(alignment))
 	append(&builder.data, u32(mask))
+	assert(mask != 0)
 }
 
 OpConvertHandleToImageINTEL :: proc(builder: ^Builder, result_type: Id, operand: Id) -> (result: Id) {
@@ -11159,8 +13732,10 @@ OpConvertHandleToImageINTEL :: proc(builder: ^Builder, result_type: Id, operand:
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -11170,8 +13745,10 @@ OpConvertHandleToSamplerINTEL :: proc(builder: ^Builder, result_type: Id, operan
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 
@@ -11181,8 +13758,10 @@ OpConvertHandleToSampledImageINTEL :: proc(builder: ^Builder, result_type: Id, o
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
 
 	append(&builder.data, u32(result_type))
+	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	append(&builder.data, u32(operand))
+	assert(operand != 0)
 	return builder.current_id^
 }
 

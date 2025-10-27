@@ -53,65 +53,15 @@ Grammar :: struct {
 	},
 }
 
-main :: proc() {
-	grammar: Grammar
-	err := json.unmarshal(
-		os.read_entire_file(
-			"generator/SPIRV-Headers/include/spirv/unified1/spirv.core.grammar.json",
-		) or_else panic("Failed to read json grammar file"),
-		&grammar,
-	)
-	assert(err == nil, "Failed to parse json grammar")
-
+generate_file :: proc(grammar: Grammar) -> string {
 	b: strings.Builder
 
 	fmt.sbprintln(&b, "// This file is auto generated from the official khronos json files")
 	fmt.sbprintln(&b, "package spirv\n")
 
-	fmt.sbprintfln(&b, "import \"core:slice\"\n")
-
 	fmt.sbprintfln(&b, "VERSION      :: 0x%08x", (grammar.major_version << 16) | (grammar.minor_version << 8))
 	fmt.sbprintfln(&b, "REVISION     :: %v",      grammar.revision)
 	fmt.sbprintfln(&b, "MAGIC_NUMBER :: %v\n",    grammar.magic_number)
-
-	fmt.sbprintfln(&b, "Id :: distinct u32")
-
-	fmt.sbprintln(&b,
-`
-Builder :: struct {
-	data:       [dynamic]u32,
-	current_id: ^Id,
-}
-
-builder_init :: proc(builder: ^Builder, generator_magic: u32, id: ^Id, allocator := context.allocator) {
-	builder.data       = make([dynamic]u32, allocator)
-	builder.current_id = id
-
-	append(&builder.data, MAGIC_NUMBER)
-	append(&builder.data, VERSION)
-	append(&builder.data, generator_magic)
-	append(&builder.data, 4194303)
-	append(&builder.data, 0)
-}
-
-builder_destroy :: proc(builder: ^Builder) {
-	delete(builder.data)
-}
-
-// you should write the id bound into this index of the _final_ SPIR-V u32 array
-ID_BOUND_INDEX :: 3
-
-next_id :: proc(builder: ^Builder) -> u32 {
-	builder.current_id^ += 1
-	return u32(builder.current_id^)
-}
-
-write_string :: proc(instructions: ^[dynamic]u32, str: string) {
-	start := len(instructions)
-	resize(instructions, len(instructions) + (len(str) + 1 + 3) / 4)
-	copy(slice.to_bytes(instructions[start:]), transmute([]byte)str)
-}
-`)
 
 	Enum_Value :: struct {
 		name:  string,
@@ -193,7 +143,6 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 		}
 	}
 
-	
 	delete_key(&enums, "PairIdRefLiteralInteger")
 	delete_key(&enums, "PairIdRefIdRef")
 	delete_key(&enums, "PairLiteralIntegerIdRef")
@@ -234,17 +183,19 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 
 			type := fmt.tprintf("Invalid_Type(%s)", operand.kind)
 
+			indent := "\t"
 			switch operand.quantifier {
 			case "?":
-				fmt.sbprintf(bb, "\tif %s, ok := %s.?; ok do ", name, name)
+				fmt.sbprintfln(bb, "\tif %s, ok := %s.?; ok {{", name, name)
+				indent = "\t\t"
 			case "*":
-				fmt.sbprintf(bb, "\tfor %s in %s do ", name, name)
-			case:
-				fmt.sbprintf(bb, "\t")
+				fmt.sbprintfln(bb, "\tfor %s in %s {{", name, name)
+				indent = "\t\t"
 			}
 
 			result: bool
 			find_type: {
+				fmt.sbprint(bb, indent)
 				if operand.kind in enums {
 					type = operand.kind
 					fmt.sbprintfln(bb, "append(&builder.data, transmute(u32)%s)", name)
@@ -267,18 +218,24 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 					name = "result_type"
 					type = "Id"
 					fmt.sbprintfln(bb, "append(&builder.data, u32(%s))", name)
+					fmt.sbprintfln(bb, "%sassert(%s != 0)", indent, name)
 				case "IdRef", "IdScope", "IdMemorySemantics":
-					fmt.sbprintfln(bb, "append(&builder.data, u32(%s))", name)
 					type = "Id"
+					fmt.sbprintfln(bb, "append(&builder.data, u32(%s))", name)
+					fmt.sbprintfln(bb, "%sassert(%s != 0)", indent, name)
 				case "PairIdRefLiteralInteger":
 					type = "struct { id: Id, literal: u32, }"
 					fmt.sbprintfln(bb, "append(&builder.data, u32(%s.id), %s.literal)", name, name)
+					fmt.sbprintfln(bb, "%sassert(%s.id != 0)", indent, name)
 				case "PairIdRefIdRef":
 					type = "[2]Id"
 					fmt.sbprintfln(bb, "append(&builder.data, u32(%s[0]), u32(%s[1]))", name, name)
+					fmt.sbprintfln(bb, "%sassert(%s[0] != 0)", indent, name)
+					fmt.sbprintfln(bb, "%sassert(%s[1] != 0)", indent, name)
 				case "PairLiteralIntegerIdRef":
 					type = "struct { literal: u32, id: Id, }"
 					fmt.sbprintfln(bb, "append(&builder.data, u32(%s.id), %s.literal)", name, name)
+					fmt.sbprintfln(bb, "%sassert(%s.id != 0)", indent, name)
 				}
 			}
 
@@ -287,6 +244,10 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 				type = fmt.tprintf("Maybe(%s) = nil", type)
 			case "*":
 				type = fmt.tprintf("..%s", type)
+			}
+
+			if len(indent) == 2 {
+				fmt.sbprintfln(bb, "\t}")
 			}
 
 			if result {
@@ -298,34 +259,18 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 		}
 
 		for operand, i in inst.operands {
-			if handle_operand(
-				&b,
-				&bb,
-				&ob,
-				&results,
-				operand,
-				i,
-				enums,
-			) {
+			if handle_operand(&b, &bb, &ob, &results, operand, i, enums) {
 				has_result = true
 			}
 		}
 
 		// wth khronos
 		if inst.opname == "OpDecorate" || inst.opname == "OpMemberDecorate" {
-			handle_operand(
-				&b,
-				&bb,
-				&ob,
-				&results,
-				{
-					kind       = "LiteralInteger",
-					quantifier = "*",
-					name       = "targets",
-				},
-				-1,
-				enums,
-			)
+			handle_operand(&b, &bb, &ob, &results, {
+				kind       = "LiteralInteger",
+				quantifier = "*",
+				name       = "targets",
+			}, -1, enums)
 		}
 
 		fmt.sbprintfln(&b, ") -> (%s) {{", strings.to_string(results))
@@ -345,5 +290,70 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 	fmt.sbprintln(&ob, "}")
 	fmt.sbprint(&b, strings.to_string(ob))
 
-	os.write_entire_file("generated.odin", transmute([]byte)strings.to_string(b))
+	return strings.to_string(b)
+}
+
+generate_extension :: proc(grammar: Grammar, package_name: string) -> string {
+	b: strings.Builder
+
+	fmt.sbprintln(&b, "// This file is auto generated from the official khronos json files")
+	fmt.sbprintln(&b, "// You must set `extension_id` to the result of `spv.OpExtInstImport(&builder, \"GLSL.std.450\")`")
+	fmt.sbprintfln(&b, "package %s\n", package_name)
+
+	fmt.sbprintfln(&b, "import spv \"..\"\n")
+
+	fmt.sbprintfln(&b, "VERSION  :: 0x%08x", (grammar.major_version << 16) | (grammar.minor_version << 8))
+	fmt.sbprintfln(&b, "REVISION :: %v\n",    grammar.revision)
+
+	fmt.sbprintfln(&b, "extension_id: spv.Id\n")
+
+	ob: strings.Builder
+	fmt.sbprintln(&ob, "Op :: enum {")
+	for inst in grammar.instructions {
+		fmt.sbprintfln(&ob, "\t%s = %v,", inst.opname, inst.opcode)
+
+		fmt.sbprintf(&b, "Op%s :: proc(builder: ^spv.Builder, result_type: spv.Id", inst.opname)
+		for operand in inst.operands {
+			fmt.sbprintf(&b, ", %s: spv.Id", operand.name)
+		}
+		fmt.sbprintfln(&b, ") -> spv.Id {{")
+		fmt.sbprintf(&b, "\treturn spv.OpExtInst(builder, result_type, extension_id, u32(Op.%s)", inst.opname)
+		for operand in inst.operands {
+			fmt.sbprintf(&b, ", %s", operand.name)
+		}
+		fmt.sbprintfln(&b, ")")
+		fmt.sbprintfln(&b, "}\n")
+	}
+	fmt.sbprintln(&ob, "}")
+	
+	fmt.sbprintln(&b, strings.to_string(ob))
+	return strings.to_string(b)
+}
+
+main :: proc() {
+	{
+		grammar: Grammar
+		err := json.unmarshal(
+			os.read_entire_file(
+				"generator/SPIRV-Headers/include/spirv/unified1/spirv.core.grammar.json",
+			) or_else panic("Failed to read json grammar file"),
+			&grammar,
+		)
+		assert(err == nil, "Failed to parse json grammar")
+		generated := generate_file(grammar)
+		os.write_entire_file("generated.odin", transmute([]byte)generated)
+	}
+
+	{
+		grammar: Grammar
+		err := json.unmarshal(
+			os.read_entire_file(
+				"generator/SPIRV-Headers/include/spirv/unified1/extinst.glsl.std.450.grammar.json",
+			) or_else panic("Failed to read json grammar file"),
+			&grammar,
+		)
+		assert(err == nil, "Failed to parse json grammar")
+		generated := generate_extension(grammar, "spirv_glsl")
+		os.write_entire_file("spirv_glsl/spirv_glsl.odin", transmute([]byte)generated)
+	}
 }
