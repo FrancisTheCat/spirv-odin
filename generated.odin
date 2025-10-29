@@ -4463,7 +4463,7 @@ OpSwitch :: proc(builder: ^Builder, selector: Id, default: Id, target: ..struct 
 	append(&builder.data, u32(default))
 	assert(default != 0)
 	for target in target {
-		append(&builder.data, u32(target.id), target.literal)
+		append(&builder.data, target.literal, u32(target.id))
 		assert(target.id != 0)
 	}
 }

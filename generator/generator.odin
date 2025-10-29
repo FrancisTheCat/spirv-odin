@@ -234,7 +234,7 @@ generate_file :: proc(grammar: Grammar) -> string {
 					fmt.sbprintfln(bb, "%sassert(%s[1] != 0)", indent, name)
 				case "PairLiteralIntegerIdRef":
 					type = "struct { literal: u32, id: Id, }"
-					fmt.sbprintfln(bb, "append(&builder.data, u32(%s.id), %s.literal)", name, name)
+					fmt.sbprintfln(bb, "append(&builder.data, %s.literal, u32(%s.id))", name, name)
 					fmt.sbprintfln(bb, "%sassert(%s.id != 0)", indent, name)
 				}
 			}
