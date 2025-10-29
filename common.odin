@@ -37,3 +37,28 @@ write_string :: proc(instructions: ^[dynamic]u32, str: string) {
 	resize(instructions, len(instructions) + (len(str) + 1 + 3) / 4)
 	copy(slice.to_bytes(instructions[start:]), transmute([]byte)str)
 }
+
+write :: proc(instructions: ^[dynamic]u32, lit: $L) {
+	when L == u32 {
+		append(instructions, lit)
+	} else when L == Id {
+		append(instructions, u32(lit))
+		assert(lit != 0)
+	} else when L == u64 {
+		append(instructions, u32(lit), u32(lit >> 32))
+	} else when L == string {
+		write_string(instructions, lit)
+	} else {
+		#panic("Unsupported literal type")
+	}
+}
+
+Pair :: struct(A, B: typeid) {
+	a: A,
+	b: B,
+}
+
+write_pair :: proc(instructions: ^[dynamic]u32, pair: Pair($A, $B)) {
+	write(instructions, pair.a)
+	write(instructions, pair.b)
+}

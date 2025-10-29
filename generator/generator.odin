@@ -69,12 +69,11 @@ generate_file :: proc(grammar: Grammar) -> string {
 	}
 	
 	values: [dynamic]Enum_Value
-	enums:  map[string]struct{}
+	enums:  map[string]struct{ has_params: bool, }
 	for op_kind in grammar.operand_kinds {
 		if op_kind.category == .Id || op_kind.category == .Literal {
 			continue
 		}
-		enums[op_kind.kind] = {}
 
 		skip := 0
 		switch op_kind.kind {
@@ -90,6 +89,7 @@ generate_file :: proc(grammar: Grammar) -> string {
 		
 		clear(&values)
 		max_name_len: int
+		has_params:   bool
 		for value in op_kind.enumerants {
 			name := value.enumerant
 			if '0' <= name[0] && name[0] <= '9' {
@@ -121,8 +121,13 @@ generate_file :: proc(grammar: Grammar) -> string {
 				}
 				v = log2(v)
 			}
+			if len(value.parameters) != 0 {
+				has_params = true
+			}
 			append(&values, Enum_Value { name, v, })
 		}
+		enums[op_kind.kind] = { has_params = has_params, }
+
 		max_name_len -= skip
 		slice.sort_by(values[:], proc(a, b: Enum_Value) -> bool { return a.value < b.value })
 		#partial switch op_kind.category {
@@ -163,7 +168,7 @@ generate_file :: proc(grammar: Grammar) -> string {
 			results: ^strings.Builder,
 			operand: Operand,
 			index:   int,
-			enums:   map[string]struct{},
+			enums:   map[string]struct{ has_params: bool, },
 		) -> bool {
 			name := operand.name
 			if name == "" || strings.contains(name, ".") {
@@ -193,12 +198,18 @@ generate_file :: proc(grammar: Grammar) -> string {
 				indent = "\t\t"
 			}
 
-			result: bool
+			result:      bool
+			n_variadics: int
+			has_params:  bool
 			find_type: {
 				fmt.sbprint(bb, indent)
-				if operand.kind in enums {
+				if e, ok := enums[operand.kind]; ok {
 					type = operand.kind
 					fmt.sbprintfln(bb, "append(&builder.data, transmute(u32)%s)", name)
+					if e.has_params {
+						n_variadics += 1
+						has_params   = true
+					}
 					break find_type
 				}
 
@@ -224,18 +235,121 @@ generate_file :: proc(grammar: Grammar) -> string {
 					fmt.sbprintfln(bb, "append(&builder.data, u32(%s))", name)
 					fmt.sbprintfln(bb, "%sassert(%s != 0)", indent, name)
 				case "PairIdRefLiteralInteger":
-					type = "struct { id: Id, literal: u32, }"
-					fmt.sbprintfln(bb, "append(&builder.data, u32(%s.id), %s.literal)", name, name)
-					fmt.sbprintfln(bb, "%sassert(%s.id != 0)", indent, name)
+					type = "Pair(Id, $L)"
+					fmt.sbprintfln(bb, "write_pair(&builder.data, %s)", name)
 				case "PairIdRefIdRef":
-					type = "[2]Id"
-					fmt.sbprintfln(bb, "append(&builder.data, u32(%s[0]), u32(%s[1]))", name, name)
-					fmt.sbprintfln(bb, "%sassert(%s[0] != 0)", indent, name)
-					fmt.sbprintfln(bb, "%sassert(%s[1] != 0)", indent, name)
+					type = "Pair(Id, Id)"
+					fmt.sbprintfln(bb, "write_pair(&builder.data, %s)", name)
 				case "PairLiteralIntegerIdRef":
-					type = "struct { literal: u32, id: Id, }"
-					fmt.sbprintfln(bb, "append(&builder.data, %s.literal, u32(%s.id))", name, name)
-					fmt.sbprintfln(bb, "%sassert(%s.id != 0)", indent, name)
+					type = "Pair($L, Id)"
+					fmt.sbprintfln(bb, "write_pair(&builder.data, %s)", name)
+				}
+			}
+
+			switch operand.quantifier {
+			case "?":
+				type = fmt.tprintf("Maybe(%s) = nil", type)
+			case "*":
+				type = fmt.tprintf("..%s", type)
+				n_variadics += 1
+			}
+
+			if result {
+				fmt.sbprint(results, name, ": ", type, sep = "")
+			} else if has_params && n_variadics == 1 {
+				fmt.sbprint(b, ", ", name, ": ", type, sep = "")
+				fmt.sbprint(b, ", _params: ..u32")
+				fmt.sbprintfln(bb, "%sappend(&builder.data, .._params)", indent)
+			} else if has_params {
+				fmt.sbprint(b, ", ", name, ": ", type, sep = "")
+				fmt.sbprintf(b, ", _params_%d: []u32 = {{}}", index)
+				fmt.sbprintfln(bb, "%sappend(&builder.data, .._params_%d)", indent, index)
+			} else {
+				fmt.sbprint(b, ", ", name, ": ", type, sep = "")
+			}
+
+			if len(indent) == 2 {
+				fmt.sbprintfln(bb, "\t}")
+			}
+
+			return result
+		}
+
+		for operand, index in inst.operands {
+			b  := &b
+			bb := &bb
+
+			name := operand.name
+			if name == "" || strings.contains(name, ".") {
+				name = fmt.tprint("_operand_", index, sep = "")
+			} else {
+				name    = strings.to_lower(name, context.temp_allocator)
+				name, _ = strings.replace_all(name, " ", "_", context.temp_allocator)
+				name, _ = strings.replace_all(name, "~", "_", context.temp_allocator)
+			}
+
+			switch name {
+			case "matrix":
+				name = "matrix_"
+			case "asm":
+				name = "asm_"
+			}
+
+			type := fmt.tprintf("Invalid_Type(%s)", operand.kind)
+
+			indent := "\t"
+			switch operand.quantifier {
+			case "?":
+				fmt.sbprintfln(bb, "\tif %s, ok := %s.?; ok {{", name, name)
+				indent = "\t\t"
+			case "*":
+				fmt.sbprintfln(bb, "\tfor %s in %s {{", name, name)
+				indent = "\t\t"
+			}
+
+			result: bool
+			params: bool
+			find_type: {
+				fmt.sbprint(bb, indent)
+				if e, ok := enums[operand.kind]; ok {
+					type = operand.kind
+					fmt.sbprintfln(bb, "append(&builder.data, transmute(u32)%s)", name)
+					if e.has_params {
+						params = true
+					}
+					break find_type
+				}
+
+				switch operand.kind {
+				case "LiteralString":
+					type = "string"
+					fmt.sbprintfln(bb, "write_string(&builder.data, %s)", name)
+				case "LiteralInteger", "LiteralExtInstInteger", "LiteralContextDependentNumber", "LiteralSpecConstantOpInteger":
+					fmt.sbprintfln(bb, "append(&builder.data, u32(%s))", name)
+					type = "u32"
+				case "IdResult":
+					name       = "result"
+					type       = "Id"
+					result     = true
+					fmt.sbprintfln(bb, "append(&builder.data, next_id(builder))")
+				case "IdResultType":
+					name = "result_type"
+					type = "Id"
+					fmt.sbprintfln(bb, "append(&builder.data, u32(%s))", name)
+					fmt.sbprintfln(bb, "%sassert(%s != 0)", indent, name)
+				case "IdRef", "IdScope", "IdMemorySemantics":
+					type = "Id"
+					fmt.sbprintfln(bb, "append(&builder.data, u32(%s))", name)
+					fmt.sbprintfln(bb, "%sassert(%s != 0)", indent, name)
+				case "PairIdRefLiteralInteger":
+					type = "Pair(Id, $L)"
+					fmt.sbprintfln(bb, "write_pair(&builder.data, %s)", name)
+				case "PairIdRefIdRef":
+					type = "Pair(Id, Id)"
+					fmt.sbprintfln(bb, "write_pair(&builder.data, %s)", name)
+				case "PairLiteralIntegerIdRef":
+					type = "Pair($L, Id)"
+					fmt.sbprintfln(bb, "write_pair(&builder.data, %s)", name)
 				}
 			}
 
@@ -246,31 +360,29 @@ generate_file :: proc(grammar: Grammar) -> string {
 				type = fmt.tprintf("..%s", type)
 			}
 
+			if result {
+				fmt.sbprint(&results, name, ": ", type, sep = "")
+			} else if params {
+				if index == len(inst.operands) - 1 {
+					fmt.sbprint(b, ", ", name, ": ", type, sep = "")
+					fmt.sbprint(b, ", _params: ..u32")
+					fmt.sbprintfln(bb, "%sappend(&builder.data, .._params)", indent)
+				} else {
+					fmt.sbprint(b, ", ", name, ": ", type, sep = "")
+					fmt.sbprintf(b, ", _params_%d: []u32 = {{}}", index)
+					fmt.sbprintfln(bb, "%sappend(&builder.data, .._params_%d)", indent, index)
+				}
+			} else {
+				fmt.sbprint(b, ", ", name, ": ", type, sep = "")
+			}
+
 			if len(indent) == 2 {
 				fmt.sbprintfln(bb, "\t}")
 			}
 
 			if result {
-				fmt.sbprint(results, name, ": ", type, sep = "")
-			} else {
-				fmt.sbprint(b, ", ", name, ": ", type, sep = "")
-			}
-			return result
-		}
-
-		for operand, i in inst.operands {
-			if handle_operand(&b, &bb, &ob, &results, operand, i, enums) {
 				has_result = true
 			}
-		}
-
-		// wth khronos
-		if inst.opname == "OpDecorate" || inst.opname == "OpMemberDecorate" {
-			handle_operand(&b, &bb, &ob, &results, {
-				kind       = "LiteralInteger",
-				quantifier = "*",
-				name       = "targets",
-			}, -1, enums)
 		}
 
 		fmt.sbprintfln(&b, ") -> (%s) {{", strings.to_string(results))

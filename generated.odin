@@ -1376,7 +1376,7 @@ OpEntryPoint :: proc(builder: ^Builder, _operand_0: ExecutionModel, entry_point:
 	}
 }
 
-OpExecutionMode :: proc(builder: ^Builder, entry_point: Id, mode: ExecutionMode) -> () {
+OpExecutionMode :: proc(builder: ^Builder, entry_point: Id, mode: ExecutionMode, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ExecutionMode))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -1384,6 +1384,7 @@ OpExecutionMode :: proc(builder: ^Builder, entry_point: Id, mode: ExecutionMode)
 	append(&builder.data, u32(entry_point))
 	assert(entry_point != 0)
 	append(&builder.data, transmute(u32)mode)
+	append(&builder.data, .._params)
 }
 
 OpCapability :: proc(builder: ^Builder, capability: Capability) -> () {
@@ -1847,7 +1848,7 @@ OpImageTexelPointer :: proc(builder: ^Builder, result_type: Id, image: Id, coord
 	return builder.current_id^
 }
 
-OpLoad :: proc(builder: ^Builder, result_type: Id, pointer: Id, _operand_3: Maybe(MemoryAccess) = nil) -> (result: Id) {
+OpLoad :: proc(builder: ^Builder, result_type: Id, pointer: Id, _operand_3: Maybe(MemoryAccess) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.Load))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -1859,11 +1860,12 @@ OpLoad :: proc(builder: ^Builder, result_type: Id, pointer: Id, _operand_3: Mayb
 	assert(pointer != 0)
 	if _operand_3, ok := _operand_3.?; ok {
 		append(&builder.data, transmute(u32)_operand_3)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpStore :: proc(builder: ^Builder, pointer: Id, object: Id, _operand_2: Maybe(MemoryAccess) = nil) -> () {
+OpStore :: proc(builder: ^Builder, pointer: Id, object: Id, _operand_2: Maybe(MemoryAccess) = nil, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.Store))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -1874,10 +1876,11 @@ OpStore :: proc(builder: ^Builder, pointer: Id, object: Id, _operand_2: Maybe(Me
 	assert(object != 0)
 	if _operand_2, ok := _operand_2.?; ok {
 		append(&builder.data, transmute(u32)_operand_2)
+		append(&builder.data, .._params)
 	}
 }
 
-OpCopyMemory :: proc(builder: ^Builder, target: Id, source: Id, _operand_2: Maybe(MemoryAccess) = nil, _operand_3: Maybe(MemoryAccess) = nil) -> () {
+OpCopyMemory :: proc(builder: ^Builder, target: Id, source: Id, _operand_2: Maybe(MemoryAccess) = nil, _params_2: []u32 = {}, _operand_3: Maybe(MemoryAccess) = nil, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.CopyMemory))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -1888,13 +1891,15 @@ OpCopyMemory :: proc(builder: ^Builder, target: Id, source: Id, _operand_2: Mayb
 	assert(source != 0)
 	if _operand_2, ok := _operand_2.?; ok {
 		append(&builder.data, transmute(u32)_operand_2)
+		append(&builder.data, .._params_2)
 	}
 	if _operand_3, ok := _operand_3.?; ok {
 		append(&builder.data, transmute(u32)_operand_3)
+		append(&builder.data, .._params)
 	}
 }
 
-OpCopyMemorySized :: proc(builder: ^Builder, target: Id, source: Id, size: Id, _operand_3: Maybe(MemoryAccess) = nil, _operand_4: Maybe(MemoryAccess) = nil) -> () {
+OpCopyMemorySized :: proc(builder: ^Builder, target: Id, source: Id, size: Id, _operand_3: Maybe(MemoryAccess) = nil, _params_3: []u32 = {}, _operand_4: Maybe(MemoryAccess) = nil, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.CopyMemorySized))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -1907,9 +1912,11 @@ OpCopyMemorySized :: proc(builder: ^Builder, target: Id, source: Id, size: Id, _
 	assert(size != 0)
 	if _operand_3, ok := _operand_3.?; ok {
 		append(&builder.data, transmute(u32)_operand_3)
+		append(&builder.data, .._params_3)
 	}
 	if _operand_4, ok := _operand_4.?; ok {
 		append(&builder.data, transmute(u32)_operand_4)
+		append(&builder.data, .._params)
 	}
 }
 
@@ -2012,7 +2019,7 @@ OpInBoundsPtrAccessChain :: proc(builder: ^Builder, result_type: Id, base: Id, e
 	return builder.current_id^
 }
 
-OpDecorate :: proc(builder: ^Builder, target: Id, _operand_1: Decoration, targets: ..u32) -> () {
+OpDecorate :: proc(builder: ^Builder, target: Id, _operand_1: Decoration, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.Decorate))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2020,12 +2027,10 @@ OpDecorate :: proc(builder: ^Builder, target: Id, _operand_1: Decoration, target
 	append(&builder.data, u32(target))
 	assert(target != 0)
 	append(&builder.data, transmute(u32)_operand_1)
-	for targets in targets {
-		append(&builder.data, u32(targets))
-	}
+	append(&builder.data, .._params)
 }
 
-OpMemberDecorate :: proc(builder: ^Builder, structure_type: Id, member: u32, _operand_2: Decoration, targets: ..u32) -> () {
+OpMemberDecorate :: proc(builder: ^Builder, structure_type: Id, member: u32, _operand_2: Decoration, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.MemberDecorate))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2034,9 +2039,7 @@ OpMemberDecorate :: proc(builder: ^Builder, structure_type: Id, member: u32, _op
 	assert(structure_type != 0)
 	append(&builder.data, u32(member))
 	append(&builder.data, transmute(u32)_operand_2)
-	for targets in targets {
-		append(&builder.data, u32(targets))
-	}
+	append(&builder.data, .._params)
 }
 
 OpDecorationGroup :: proc(builder: ^Builder) -> (result: Id) {
@@ -2061,7 +2064,7 @@ OpGroupDecorate :: proc(builder: ^Builder, decoration_group: Id, targets: ..Id) 
 	}
 }
 
-OpGroupMemberDecorate :: proc(builder: ^Builder, decoration_group: Id, targets: ..struct { id: Id, literal: u32, }) -> () {
+OpGroupMemberDecorate :: proc(builder: ^Builder, decoration_group: Id, targets: ..Pair(Id, $L)) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.GroupMemberDecorate))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2069,8 +2072,7 @@ OpGroupMemberDecorate :: proc(builder: ^Builder, decoration_group: Id, targets: 
 	append(&builder.data, u32(decoration_group))
 	assert(decoration_group != 0)
 	for targets in targets {
-		append(&builder.data, u32(targets.id), targets.literal)
-		assert(targets.id != 0)
+		write_pair(&builder.data, targets)
 	}
 }
 
@@ -2214,7 +2216,7 @@ OpSampledImage :: proc(builder: ^Builder, result_type: Id, image: Id, sampler: I
 	return builder.current_id^
 }
 
-OpImageSampleImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageSampleImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSampleImplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2228,11 +2230,12 @@ OpImageSampleImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_ima
 	assert(coordinate != 0)
 	if _operand_4, ok := _operand_4.?; ok {
 		append(&builder.data, transmute(u32)_operand_4)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpImageSampleExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands) -> (result: Id) {
+OpImageSampleExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSampleExplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2245,10 +2248,11 @@ OpImageSampleExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_ima
 	append(&builder.data, u32(coordinate))
 	assert(coordinate != 0)
 	append(&builder.data, transmute(u32)_operand_4)
+	append(&builder.data, .._params)
 	return builder.current_id^
 }
 
-OpImageSampleDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageSampleDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSampleDrefImplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2264,11 +2268,12 @@ OpImageSampleDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled
 	assert(d_ref_ != 0)
 	if _operand_5, ok := _operand_5.?; ok {
 		append(&builder.data, transmute(u32)_operand_5)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpImageSampleDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands) -> (result: Id) {
+OpImageSampleDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSampleDrefExplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2283,10 +2288,11 @@ OpImageSampleDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled
 	append(&builder.data, u32(d_ref_))
 	assert(d_ref_ != 0)
 	append(&builder.data, transmute(u32)_operand_5)
+	append(&builder.data, .._params)
 	return builder.current_id^
 }
 
-OpImageSampleProjImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageSampleProjImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSampleProjImplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2300,11 +2306,12 @@ OpImageSampleProjImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled
 	assert(coordinate != 0)
 	if _operand_4, ok := _operand_4.?; ok {
 		append(&builder.data, transmute(u32)_operand_4)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpImageSampleProjExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands) -> (result: Id) {
+OpImageSampleProjExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSampleProjExplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2317,10 +2324,11 @@ OpImageSampleProjExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled
 	append(&builder.data, u32(coordinate))
 	assert(coordinate != 0)
 	append(&builder.data, transmute(u32)_operand_4)
+	append(&builder.data, .._params)
 	return builder.current_id^
 }
 
-OpImageSampleProjDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageSampleProjDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSampleProjDrefImplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2336,11 +2344,12 @@ OpImageSampleProjDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sam
 	assert(d_ref_ != 0)
 	if _operand_5, ok := _operand_5.?; ok {
 		append(&builder.data, transmute(u32)_operand_5)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpImageSampleProjDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands) -> (result: Id) {
+OpImageSampleProjDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSampleProjDrefExplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2355,10 +2364,11 @@ OpImageSampleProjDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sam
 	append(&builder.data, u32(d_ref_))
 	assert(d_ref_ != 0)
 	append(&builder.data, transmute(u32)_operand_5)
+	append(&builder.data, .._params)
 	return builder.current_id^
 }
 
-OpImageFetch :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageFetch :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageFetch))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2372,11 +2382,12 @@ OpImageFetch :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: 
 	assert(coordinate != 0)
 	if _operand_4, ok := _operand_4.?; ok {
 		append(&builder.data, transmute(u32)_operand_4)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpImageGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, component: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, component: Id, _operand_5: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageGather))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2392,11 +2403,12 @@ OpImageGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coo
 	assert(component != 0)
 	if _operand_5, ok := _operand_5.?; ok {
 		append(&builder.data, transmute(u32)_operand_5)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpImageDrefGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageDrefGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageDrefGather))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2412,11 +2424,12 @@ OpImageDrefGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id,
 	assert(d_ref_ != 0)
 	if _operand_5, ok := _operand_5.?; ok {
 		append(&builder.data, transmute(u32)_operand_5)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpImageRead :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageRead :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageRead))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2430,11 +2443,12 @@ OpImageRead :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: I
 	assert(coordinate != 0)
 	if _operand_4, ok := _operand_4.?; ok {
 		append(&builder.data, transmute(u32)_operand_4)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpImageWrite :: proc(builder: ^Builder, image: Id, coordinate: Id, texel: Id, _operand_3: Maybe(ImageOperands) = nil) -> () {
+OpImageWrite :: proc(builder: ^Builder, image: Id, coordinate: Id, texel: Id, _operand_3: Maybe(ImageOperands) = nil, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageWrite))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -2447,6 +2461,7 @@ OpImageWrite :: proc(builder: ^Builder, image: Id, coordinate: Id, texel: Id, _o
 	assert(texel != 0)
 	if _operand_3, ok := _operand_3.?; ok {
 		append(&builder.data, transmute(u32)_operand_3)
+		append(&builder.data, .._params)
 	}
 }
 
@@ -4381,7 +4396,7 @@ OpAtomicXor :: proc(builder: ^Builder, result_type: Id, pointer: Id, memory: Id,
 	return builder.current_id^
 }
 
-OpPhi :: proc(builder: ^Builder, result_type: Id, _operand_2: ..[2]Id) -> (result: Id) {
+OpPhi :: proc(builder: ^Builder, result_type: Id, _operand_2: ..Pair(Id, Id)) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.Phi))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -4390,14 +4405,12 @@ OpPhi :: proc(builder: ^Builder, result_type: Id, _operand_2: ..[2]Id) -> (resul
 	assert(result_type != 0)
 	append(&builder.data, next_id(builder))
 	for _operand_2 in _operand_2 {
-		append(&builder.data, u32(_operand_2[0]), u32(_operand_2[1]))
-		assert(_operand_2[0] != 0)
-		assert(_operand_2[1] != 0)
+		write_pair(&builder.data, _operand_2)
 	}
 	return builder.current_id^
 }
 
-OpLoopMerge :: proc(builder: ^Builder, merge_block: Id, continue_target: Id, _operand_2: LoopControl) -> () {
+OpLoopMerge :: proc(builder: ^Builder, merge_block: Id, continue_target: Id, _operand_2: LoopControl, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.LoopMerge))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -4407,6 +4420,7 @@ OpLoopMerge :: proc(builder: ^Builder, merge_block: Id, continue_target: Id, _op
 	append(&builder.data, u32(continue_target))
 	assert(continue_target != 0)
 	append(&builder.data, transmute(u32)_operand_2)
+	append(&builder.data, .._params)
 }
 
 OpSelectionMerge :: proc(builder: ^Builder, merge_block: Id, _operand_1: SelectionControl) -> () {
@@ -4453,7 +4467,7 @@ OpBranchConditional :: proc(builder: ^Builder, condition: Id, true_label: Id, fa
 	}
 }
 
-OpSwitch :: proc(builder: ^Builder, selector: Id, default: Id, target: ..struct { literal: u32, id: Id, }) -> () {
+OpSwitch :: proc(builder: ^Builder, selector: Id, default: Id, target: ..Pair($L, Id)) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.Switch))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -4463,8 +4477,7 @@ OpSwitch :: proc(builder: ^Builder, selector: Id, default: Id, target: ..struct 
 	append(&builder.data, u32(default))
 	assert(default != 0)
 	for target in target {
-		append(&builder.data, target.literal, u32(target.id))
-		assert(target.id != 0)
+		write_pair(&builder.data, target)
 	}
 }
 
@@ -5232,7 +5245,7 @@ OpBuildNDRange :: proc(builder: ^Builder, result_type: Id, globalworksize: Id, l
 	return builder.current_id^
 }
 
-OpImageSparseSampleImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageSparseSampleImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSparseSampleImplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -5246,11 +5259,12 @@ OpImageSparseSampleImplicitLod :: proc(builder: ^Builder, result_type: Id, sampl
 	assert(coordinate != 0)
 	if _operand_4, ok := _operand_4.?; ok {
 		append(&builder.data, transmute(u32)_operand_4)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpImageSparseSampleExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands) -> (result: Id) {
+OpImageSparseSampleExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSparseSampleExplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -5263,10 +5277,11 @@ OpImageSparseSampleExplicitLod :: proc(builder: ^Builder, result_type: Id, sampl
 	append(&builder.data, u32(coordinate))
 	assert(coordinate != 0)
 	append(&builder.data, transmute(u32)_operand_4)
+	append(&builder.data, .._params)
 	return builder.current_id^
 }
 
-OpImageSparseSampleDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageSparseSampleDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSparseSampleDrefImplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -5282,11 +5297,12 @@ OpImageSparseSampleDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, s
 	assert(d_ref_ != 0)
 	if _operand_5, ok := _operand_5.?; ok {
 		append(&builder.data, transmute(u32)_operand_5)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpImageSparseSampleDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands) -> (result: Id) {
+OpImageSparseSampleDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSparseSampleDrefExplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -5301,10 +5317,11 @@ OpImageSparseSampleDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, s
 	append(&builder.data, u32(d_ref_))
 	assert(d_ref_ != 0)
 	append(&builder.data, transmute(u32)_operand_5)
+	append(&builder.data, .._params)
 	return builder.current_id^
 }
 
-OpImageSparseSampleProjImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageSparseSampleProjImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSparseSampleProjImplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -5318,11 +5335,12 @@ OpImageSparseSampleProjImplicitLod :: proc(builder: ^Builder, result_type: Id, s
 	assert(coordinate != 0)
 	if _operand_4, ok := _operand_4.?; ok {
 		append(&builder.data, transmute(u32)_operand_4)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpImageSparseSampleProjExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands) -> (result: Id) {
+OpImageSparseSampleProjExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, _operand_4: ImageOperands, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSparseSampleProjExplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -5335,10 +5353,11 @@ OpImageSparseSampleProjExplicitLod :: proc(builder: ^Builder, result_type: Id, s
 	append(&builder.data, u32(coordinate))
 	assert(coordinate != 0)
 	append(&builder.data, transmute(u32)_operand_4)
+	append(&builder.data, .._params)
 	return builder.current_id^
 }
 
-OpImageSparseSampleProjDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageSparseSampleProjDrefImplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSparseSampleProjDrefImplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -5354,11 +5373,12 @@ OpImageSparseSampleProjDrefImplicitLod :: proc(builder: ^Builder, result_type: I
 	assert(d_ref_ != 0)
 	if _operand_5, ok := _operand_5.?; ok {
 		append(&builder.data, transmute(u32)_operand_5)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpImageSparseSampleProjDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands) -> (result: Id) {
+OpImageSparseSampleProjDrefExplicitLod :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: ImageOperands, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSparseSampleProjDrefExplicitLod))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -5373,10 +5393,11 @@ OpImageSparseSampleProjDrefExplicitLod :: proc(builder: ^Builder, result_type: I
 	append(&builder.data, u32(d_ref_))
 	assert(d_ref_ != 0)
 	append(&builder.data, transmute(u32)_operand_5)
+	append(&builder.data, .._params)
 	return builder.current_id^
 }
 
-OpImageSparseFetch :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageSparseFetch :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSparseFetch))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -5390,11 +5411,12 @@ OpImageSparseFetch :: proc(builder: ^Builder, result_type: Id, image: Id, coordi
 	assert(coordinate != 0)
 	if _operand_4, ok := _operand_4.?; ok {
 		append(&builder.data, transmute(u32)_operand_4)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpImageSparseGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, component: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageSparseGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, component: Id, _operand_5: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSparseGather))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -5410,11 +5432,12 @@ OpImageSparseGather :: proc(builder: ^Builder, result_type: Id, sampled_image: I
 	assert(component != 0)
 	if _operand_5, ok := _operand_5.?; ok {
 		append(&builder.data, transmute(u32)_operand_5)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpImageSparseDrefGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageSparseDrefGather :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, d_ref_: Id, _operand_5: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSparseDrefGather))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -5430,6 +5453,7 @@ OpImageSparseDrefGather :: proc(builder: ^Builder, result_type: Id, sampled_imag
 	assert(d_ref_ != 0)
 	if _operand_5, ok := _operand_5.?; ok {
 		append(&builder.data, transmute(u32)_operand_5)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
@@ -5484,7 +5508,7 @@ OpAtomicFlagClear :: proc(builder: ^Builder, pointer: Id, memory: Id, semantics:
 	assert(semantics != 0)
 }
 
-OpImageSparseRead :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageSparseRead :: proc(builder: ^Builder, result_type: Id, image: Id, coordinate: Id, _operand_4: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSparseRead))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -5498,6 +5522,7 @@ OpImageSparseRead :: proc(builder: ^Builder, result_type: Id, image: Id, coordin
 	assert(coordinate != 0)
 	if _operand_4, ok := _operand_4.?; ok {
 		append(&builder.data, transmute(u32)_operand_4)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
@@ -5634,7 +5659,7 @@ OpModuleProcessed :: proc(builder: ^Builder, process: string) -> () {
 	write_string(&builder.data, process)
 }
 
-OpExecutionModeId :: proc(builder: ^Builder, entry_point: Id, mode: ExecutionMode) -> () {
+OpExecutionModeId :: proc(builder: ^Builder, entry_point: Id, mode: ExecutionMode, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ExecutionModeId))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -5642,9 +5667,10 @@ OpExecutionModeId :: proc(builder: ^Builder, entry_point: Id, mode: ExecutionMod
 	append(&builder.data, u32(entry_point))
 	assert(entry_point != 0)
 	append(&builder.data, transmute(u32)mode)
+	append(&builder.data, .._params)
 }
 
-OpDecorateId :: proc(builder: ^Builder, target: Id, _operand_1: Decoration) -> () {
+OpDecorateId :: proc(builder: ^Builder, target: Id, _operand_1: Decoration, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.DecorateId))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -5652,6 +5678,7 @@ OpDecorateId :: proc(builder: ^Builder, target: Id, _operand_1: Decoration) -> (
 	append(&builder.data, u32(target))
 	assert(target != 0)
 	append(&builder.data, transmute(u32)_operand_1)
+	append(&builder.data, .._params)
 }
 
 OpGroupNonUniformElect :: proc(builder: ^Builder, result_type: Id, execution: Id) -> (result: Id) {
@@ -6383,7 +6410,7 @@ OpTypeTensorARM :: proc(builder: ^Builder, element_type: Id, rank: Maybe(Id) = n
 	return builder.current_id^
 }
 
-OpTensorReadARM :: proc(builder: ^Builder, result_type: Id, tensor: Id, coordinates: Id, _operand_4: Maybe(TensorOperands) = nil) -> (result: Id) {
+OpTensorReadARM :: proc(builder: ^Builder, result_type: Id, tensor: Id, coordinates: Id, _operand_4: Maybe(TensorOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.TensorReadARM))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -6397,11 +6424,12 @@ OpTensorReadARM :: proc(builder: ^Builder, result_type: Id, tensor: Id, coordina
 	assert(coordinates != 0)
 	if _operand_4, ok := _operand_4.?; ok {
 		append(&builder.data, transmute(u32)_operand_4)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpTensorWriteARM :: proc(builder: ^Builder, tensor: Id, coordinates: Id, object: Id, _operand_3: Maybe(TensorOperands) = nil) -> () {
+OpTensorWriteARM :: proc(builder: ^Builder, tensor: Id, coordinates: Id, object: Id, _operand_3: Maybe(TensorOperands) = nil, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.TensorWriteARM))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -6414,6 +6442,7 @@ OpTensorWriteARM :: proc(builder: ^Builder, tensor: Id, coordinates: Id, object:
 	assert(object != 0)
 	if _operand_3, ok := _operand_3.?; ok {
 		append(&builder.data, transmute(u32)_operand_3)
+		append(&builder.data, .._params)
 	}
 }
 
@@ -6797,7 +6826,7 @@ OpExtInstWithForwardRefsKHR :: proc(builder: ^Builder, result_type: Id, set: Id,
 	return builder.current_id^
 }
 
-OpUntypedGroupAsyncCopyKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, destination: Id, source: Id, element_num_bytes: Id, num_elements: Id, stride: Id, event: Id, destination_memory_operands: Maybe(MemoryAccess) = nil, source_memory_operands: Maybe(MemoryAccess) = nil) -> (result: Id) {
+OpUntypedGroupAsyncCopyKHR :: proc(builder: ^Builder, result_type: Id, execution: Id, destination: Id, source: Id, element_num_bytes: Id, num_elements: Id, stride: Id, event: Id, destination_memory_operands: Maybe(MemoryAccess) = nil, _params_9: []u32 = {}, source_memory_operands: Maybe(MemoryAccess) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.UntypedGroupAsyncCopyKHR))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -6821,9 +6850,11 @@ OpUntypedGroupAsyncCopyKHR :: proc(builder: ^Builder, result_type: Id, execution
 	assert(event != 0)
 	if destination_memory_operands, ok := destination_memory_operands.?; ok {
 		append(&builder.data, transmute(u32)destination_memory_operands)
+		append(&builder.data, .._params_9)
 	}
 	if source_memory_operands, ok := source_memory_operands.?; ok {
 		append(&builder.data, transmute(u32)source_memory_operands)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
@@ -7028,7 +7059,7 @@ OpTypeCooperativeMatrixKHR :: proc(builder: ^Builder, component_type: Id, scope:
 	return builder.current_id^
 }
 
-OpCooperativeMatrixLoadKHR :: proc(builder: ^Builder, result_type: Id, pointer: Id, memorylayout: Id, stride: Maybe(Id) = nil, memory_operand: Maybe(MemoryAccess) = nil) -> (result: Id) {
+OpCooperativeMatrixLoadKHR :: proc(builder: ^Builder, result_type: Id, pointer: Id, memorylayout: Id, stride: Maybe(Id) = nil, memory_operand: Maybe(MemoryAccess) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.CooperativeMatrixLoadKHR))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -7046,11 +7077,12 @@ OpCooperativeMatrixLoadKHR :: proc(builder: ^Builder, result_type: Id, pointer: 
 	}
 	if memory_operand, ok := memory_operand.?; ok {
 		append(&builder.data, transmute(u32)memory_operand)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpCooperativeMatrixStoreKHR :: proc(builder: ^Builder, pointer: Id, object: Id, memorylayout: Id, stride: Maybe(Id) = nil, memory_operand: Maybe(MemoryAccess) = nil) -> () {
+OpCooperativeMatrixStoreKHR :: proc(builder: ^Builder, pointer: Id, object: Id, memorylayout: Id, stride: Maybe(Id) = nil, memory_operand: Maybe(MemoryAccess) = nil, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.CooperativeMatrixStoreKHR))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -7067,6 +7099,7 @@ OpCooperativeMatrixStoreKHR :: proc(builder: ^Builder, pointer: Id, object: Id, 
 	}
 	if memory_operand, ok := memory_operand.?; ok {
 		append(&builder.data, transmute(u32)memory_operand)
+		append(&builder.data, .._params)
 	}
 }
 
@@ -8293,7 +8326,7 @@ OpTypeHitObjectNV :: proc(builder: ^Builder) -> (result: Id) {
 	return builder.current_id^
 }
 
-OpImageSampleFootprintNV :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, granularity: Id, coarse: Id, _operand_6: Maybe(ImageOperands) = nil) -> (result: Id) {
+OpImageSampleFootprintNV :: proc(builder: ^Builder, result_type: Id, sampled_image: Id, coordinate: Id, granularity: Id, coarse: Id, _operand_6: Maybe(ImageOperands) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.ImageSampleFootprintNV))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -8311,6 +8344,7 @@ OpImageSampleFootprintNV :: proc(builder: ^Builder, result_type: Id, sampled_ima
 	assert(coarse != 0)
 	if _operand_6, ok := _operand_6.?; ok {
 		append(&builder.data, transmute(u32)_operand_6)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
@@ -8549,7 +8583,7 @@ OpFetchMicroTriangleVertexBarycentricNV :: proc(builder: ^Builder, result_type: 
 	return builder.current_id^
 }
 
-OpCooperativeVectorLoadNV :: proc(builder: ^Builder, result_type: Id, pointer: Id, offset: Id, _operand_4: Maybe(MemoryAccess) = nil) -> (result: Id) {
+OpCooperativeVectorLoadNV :: proc(builder: ^Builder, result_type: Id, pointer: Id, offset: Id, _operand_4: Maybe(MemoryAccess) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.CooperativeVectorLoadNV))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -8563,11 +8597,12 @@ OpCooperativeVectorLoadNV :: proc(builder: ^Builder, result_type: Id, pointer: I
 	assert(offset != 0)
 	if _operand_4, ok := _operand_4.?; ok {
 		append(&builder.data, transmute(u32)_operand_4)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpCooperativeVectorStoreNV :: proc(builder: ^Builder, pointer: Id, offset: Id, object: Id, _operand_3: Maybe(MemoryAccess) = nil) -> () {
+OpCooperativeVectorStoreNV :: proc(builder: ^Builder, pointer: Id, offset: Id, object: Id, _operand_3: Maybe(MemoryAccess) = nil, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.CooperativeVectorStoreNV))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -8580,6 +8615,7 @@ OpCooperativeVectorStoreNV :: proc(builder: ^Builder, pointer: Id, offset: Id, o
 	assert(object != 0)
 	if _operand_3, ok := _operand_3.?; ok {
 		append(&builder.data, transmute(u32)_operand_3)
+		append(&builder.data, .._params)
 	}
 }
 
@@ -8783,7 +8819,7 @@ OpTypeCooperativeMatrixNV :: proc(builder: ^Builder, component_type: Id, executi
 	return builder.current_id^
 }
 
-OpCooperativeMatrixLoadNV :: proc(builder: ^Builder, result_type: Id, pointer: Id, stride: Id, column_major: Id, _operand_5: Maybe(MemoryAccess) = nil) -> (result: Id) {
+OpCooperativeMatrixLoadNV :: proc(builder: ^Builder, result_type: Id, pointer: Id, stride: Id, column_major: Id, _operand_5: Maybe(MemoryAccess) = nil, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.CooperativeMatrixLoadNV))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -8799,11 +8835,12 @@ OpCooperativeMatrixLoadNV :: proc(builder: ^Builder, result_type: Id, pointer: I
 	assert(column_major != 0)
 	if _operand_5, ok := _operand_5.?; ok {
 		append(&builder.data, transmute(u32)_operand_5)
+		append(&builder.data, .._params)
 	}
 	return builder.current_id^
 }
 
-OpCooperativeMatrixStoreNV :: proc(builder: ^Builder, pointer: Id, object: Id, stride: Id, column_major: Id, _operand_4: Maybe(MemoryAccess) = nil) -> () {
+OpCooperativeMatrixStoreNV :: proc(builder: ^Builder, pointer: Id, object: Id, stride: Id, column_major: Id, _operand_4: Maybe(MemoryAccess) = nil, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.CooperativeMatrixStoreNV))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -8818,6 +8855,7 @@ OpCooperativeMatrixStoreNV :: proc(builder: ^Builder, pointer: Id, object: Id, s
 	assert(column_major != 0)
 	if _operand_4, ok := _operand_4.?; ok {
 		append(&builder.data, transmute(u32)_operand_4)
+		append(&builder.data, .._params)
 	}
 }
 
@@ -8881,7 +8919,7 @@ OpCooperativeMatrixReduceNV :: proc(builder: ^Builder, result_type: Id, matrix_:
 	return builder.current_id^
 }
 
-OpCooperativeMatrixLoadTensorNV :: proc(builder: ^Builder, result_type: Id, pointer: Id, object: Id, tensorlayout: Id, memory_operand: MemoryAccess, tensor_addressing_operands: TensorAddressingOperands) -> (result: Id) {
+OpCooperativeMatrixLoadTensorNV :: proc(builder: ^Builder, result_type: Id, pointer: Id, object: Id, tensorlayout: Id, memory_operand: MemoryAccess, _params_5: []u32 = {}, tensor_addressing_operands: TensorAddressingOperands, _params: ..u32) -> (result: Id) {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.CooperativeMatrixLoadTensorNV))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -8896,11 +8934,13 @@ OpCooperativeMatrixLoadTensorNV :: proc(builder: ^Builder, result_type: Id, poin
 	append(&builder.data, u32(tensorlayout))
 	assert(tensorlayout != 0)
 	append(&builder.data, transmute(u32)memory_operand)
+	append(&builder.data, .._params_5)
 	append(&builder.data, transmute(u32)tensor_addressing_operands)
+	append(&builder.data, .._params)
 	return builder.current_id^
 }
 
-OpCooperativeMatrixStoreTensorNV :: proc(builder: ^Builder, pointer: Id, object: Id, tensorlayout: Id, memory_operand: MemoryAccess, tensor_addressing_operands: TensorAddressingOperands) -> () {
+OpCooperativeMatrixStoreTensorNV :: proc(builder: ^Builder, pointer: Id, object: Id, tensorlayout: Id, memory_operand: MemoryAccess, _params_3: []u32 = {}, tensor_addressing_operands: TensorAddressingOperands, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.CooperativeMatrixStoreTensorNV))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -8912,7 +8952,9 @@ OpCooperativeMatrixStoreTensorNV :: proc(builder: ^Builder, pointer: Id, object:
 	append(&builder.data, u32(tensorlayout))
 	assert(tensorlayout != 0)
 	append(&builder.data, transmute(u32)memory_operand)
+	append(&builder.data, .._params_3)
 	append(&builder.data, transmute(u32)tensor_addressing_operands)
+	append(&builder.data, .._params)
 }
 
 OpCooperativeMatrixPerElementOpNV :: proc(builder: ^Builder, result_type: Id, matrix_: Id, func: Id, operands: ..Id) -> (result: Id) {
@@ -9938,7 +9980,7 @@ OpExpectKHR :: proc(builder: ^Builder, result_type: Id, value: Id, expectedvalue
 	return builder.current_id^
 }
 
-OpDecorateString :: proc(builder: ^Builder, target: Id, _operand_1: Decoration) -> () {
+OpDecorateString :: proc(builder: ^Builder, target: Id, _operand_1: Decoration, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.DecorateString))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -9946,9 +9988,10 @@ OpDecorateString :: proc(builder: ^Builder, target: Id, _operand_1: Decoration) 
 	append(&builder.data, u32(target))
 	assert(target != 0)
 	append(&builder.data, transmute(u32)_operand_1)
+	append(&builder.data, .._params)
 }
 
-OpMemberDecorateString :: proc(builder: ^Builder, struct_type: Id, member: u32, _operand_2: Decoration) -> () {
+OpMemberDecorateString :: proc(builder: ^Builder, struct_type: Id, member: u32, _operand_2: Decoration, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.MemberDecorateString))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -9957,6 +10000,7 @@ OpMemberDecorateString :: proc(builder: ^Builder, struct_type: Id, member: u32, 
 	assert(struct_type != 0)
 	append(&builder.data, u32(member))
 	append(&builder.data, transmute(u32)_operand_2)
+	append(&builder.data, .._params)
 }
 
 OpVmeImageINTEL :: proc(builder: ^Builder, result_type: Id, image_type: Id, sampler: Id) -> (result: Id) {
@@ -13254,7 +13298,7 @@ OpTypeTaskSequenceINTEL :: proc(builder: ^Builder) -> (result: Id) {
 	return builder.current_id^
 }
 
-OpSubgroupBlockPrefetchINTEL :: proc(builder: ^Builder, ptr: Id, numbytes: Id, _operand_2: Maybe(MemoryAccess) = nil) -> () {
+OpSubgroupBlockPrefetchINTEL :: proc(builder: ^Builder, ptr: Id, numbytes: Id, _operand_2: Maybe(MemoryAccess) = nil, _params: ..u32) -> () {
 	start := len(builder.data)
 	append(&builder.data, u32(Op.SubgroupBlockPrefetchINTEL))
 	defer builder.data[start] |= u32(len(builder.data) - start) << 16
@@ -13265,6 +13309,7 @@ OpSubgroupBlockPrefetchINTEL :: proc(builder: ^Builder, ptr: Id, numbytes: Id, _
 	assert(numbytes != 0)
 	if _operand_2, ok := _operand_2.?; ok {
 		append(&builder.data, transmute(u32)_operand_2)
+		append(&builder.data, .._params)
 	}
 }
 
