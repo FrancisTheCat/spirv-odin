@@ -409,7 +409,7 @@ generate_extension :: proc(grammar: Grammar, package_name: string) -> string {
 	b: strings.Builder
 
 	fmt.sbprintln(&b, "// This file is auto generated from the official khronos json files")
-	fmt.sbprintln(&b, "// You must set `extension_id` to the result of `spv.OpExtInstImport(&builder, \"GLSL.std.450\")`")
+	fmt.sbprintln(&b, "// You must set `extension_id` to the result of `spv.OpExtInstImport(&builder, \"<extension-name>\")`")
 	fmt.sbprintfln(&b, "package %s\n", package_name)
 
 	fmt.sbprintfln(&b, "import spv \"..\"\n")
@@ -443,29 +443,33 @@ generate_extension :: proc(grammar: Grammar, package_name: string) -> string {
 }
 
 main :: proc() {
-	{
-		grammar: Grammar
-		err := json.unmarshal(
-			os.read_entire_file(
-				"generator/SPIRV-Headers/include/spirv/unified1/spirv.core.grammar.json",
-			) or_else panic("Failed to read json grammar file"),
-			&grammar,
-		)
-		assert(err == nil, "Failed to parse json grammar")
-		generated := generate_file(grammar)
-		os.write_entire_file("generated.odin", transmute([]byte)generated)
+	if len(os.args) < 2 || len(os.args) % 2 != 0 {
+		fmt.printfln("Usage: %s <grammar> <extension-1-name> <extension-1-grammar> ...", os.args[0])
+		os.exit(1)
 	}
+	
+	grammar: Grammar
+	err := json.unmarshal(
+		os.read_entire_file(os.args[1]) or_else panic("Failed to read json grammar file"),
+		&grammar,
+	)
+	assert(err == nil, "Failed to parse json grammar")
+	generated := generate_file(grammar)
+	os.write_entire_file("spirv_generated.odin", transmute([]byte)generated)
+	
 
-	{
+	for i := 2; i < len(os.args); i += 2 {
+		name := os.args[i + 0]
+		path := os.args[i + 1]
+
 		grammar: Grammar
 		err := json.unmarshal(
-			os.read_entire_file(
-				"generator/SPIRV-Headers/include/spirv/unified1/extinst.glsl.std.450.grammar.json",
-			) or_else panic("Failed to read json grammar file"),
+			os.read_entire_file(path) or_else panic("Failed to read extension json grammar file"),
 			&grammar,
 		)
 		assert(err == nil, "Failed to parse json grammar")
-		generated := generate_extension(grammar, "spirv_glsl")
-		os.write_entire_file("spirv_glsl/spirv_glsl.odin", transmute([]byte)generated)
+		generated := generate_extension(grammar, name)
+		os.make_directory(name)
+		os.write_entire_file(fmt.tprintf("%s/%s.odin", name, name), transmute([]byte)generated)
 	}
 }

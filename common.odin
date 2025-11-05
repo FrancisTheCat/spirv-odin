@@ -9,12 +9,12 @@ Builder :: struct {
 	current_id: ^Id,
 }
 
-builder_init :: proc(builder: ^Builder, generator_magic: u32, id: ^Id, allocator := context.allocator) {
+builder_init :: proc(builder: ^Builder, generator_magic: u32, id: ^Id, version: u32 = VERSION, allocator := context.allocator) {
 	builder.data       = make([dynamic]u32, allocator)
 	builder.current_id = id
 
 	append(&builder.data, MAGIC_NUMBER)
-	append(&builder.data, VERSION)
+	append(&builder.data, version)
 	append(&builder.data, generator_magic)
 	append(&builder.data, 4194303)
 	append(&builder.data, 0)

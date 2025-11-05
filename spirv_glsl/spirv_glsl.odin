@@ -1,5 +1,5 @@
 // This file is auto generated from the official khronos json files
-// You must set `extension_id` to the result of `spv.OpExtInstImport(&builder, "GLSL.std.450")`
+// You must set `extension_id` to the result of `spv.OpExtInstImport(&builder, "<extension-name>")`
 package spirv_glsl
 
 import spv ".."
