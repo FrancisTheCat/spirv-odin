@@ -13,44 +13,58 @@ OpDebugInfoNone :: proc(builder: ^spv.Builder, result_type: spv.Id) -> spv.Id {
 	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugInfoNone))
 }
 
-OpDebugCompilationUnit :: proc(builder: ^spv.Builder, result_type: spv.Id, Version: spv.Id, DWARF Version: spv.Id, Source: spv.Id, Language: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugCompilationUnit), Version, DWARF Version, Source, Language)
+OpDebugCompilationUnit :: proc(builder: ^spv.Builder, result_type: spv.Id, Version: spv.Id, DWARF_Version: spv.Id, Source: spv.Id, Language: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugCompilationUnit), Version, DWARF_Version, Source, Language)
 }
 
 OpDebugTypeBasic :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Size: spv.Id, Encoding: spv.Id, Flags: spv.Id) -> spv.Id {
 	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeBasic), Name, Size, Encoding, Flags)
 }
 
-OpDebugTypePointer :: proc(builder: ^spv.Builder, result_type: spv.Id, Base Type: spv.Id, Storage Class: spv.Id, Flags: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypePointer), Base Type, Storage Class, Flags)
+OpDebugTypePointer :: proc(builder: ^spv.Builder, result_type: spv.Id, Base_Type: spv.Id, Storage_Class: spv.Id, Flags: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypePointer), Base_Type, Storage_Class, Flags)
 }
 
-OpDebugTypeQualifier :: proc(builder: ^spv.Builder, result_type: spv.Id, Base Type: spv.Id, Type Qualifier: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeQualifier), Base Type, Type Qualifier)
+OpDebugTypeQualifier :: proc(builder: ^spv.Builder, result_type: spv.Id, Base_Type: spv.Id, Type_Qualifier: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeQualifier), Base_Type, Type_Qualifier)
 }
 
-OpDebugTypeArray :: proc(builder: ^spv.Builder, result_type: spv.Id, Base Type: spv.Id, Component Counts: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeArray), Base Type, Component Counts)
+OpDebugTypeArray :: proc(builder: ^spv.Builder, result_type: spv.Id, Base_Type: spv.Id, Component_Counts: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeArray), Base_Type, Component_Counts)
 }
 
-OpDebugTypeVector :: proc(builder: ^spv.Builder, result_type: spv.Id, Base Type: spv.Id, Component Count: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeVector), Base Type, Component Count)
+OpDebugTypeVector :: proc(builder: ^spv.Builder, result_type: spv.Id, Base_Type: spv.Id, Component_Count: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeVector), Base_Type, Component_Count)
 }
 
-OpDebugTypedef :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Base Type: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypedef), Name, Base Type, Source, Line, Column, Parent)
+OpDebugTypedef :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Base_Type: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypedef), Name, Base_Type, Source, Line, Column, Parent)
 }
 
-OpDebugTypeFunction :: proc(builder: ^spv.Builder, result_type: spv.Id, Flags: spv.Id, Return Type: spv.Id, Parameter Types: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeFunction), Flags, Return Type, Parameter Types)
+OpDebugTypeFunction :: proc(builder: ^spv.Builder, result_type: spv.Id, Flags: spv.Id, Return_Type: spv.Id, Parameter_Types: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeFunction), Flags, Return_Type, Parameter_Types)
 }
 
-OpDebugTypeEnum :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Underlying Type: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id, Size: spv.Id, Flags: spv.Id, Value, Name, Value, Name, ...: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeEnum), Name, Underlying Type, Source, Line, Column, Parent, Size, Flags, Value, Name, Value, Name, ...)
+// manually adjusted
+OpDebugTypeEnum :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Underlying_Type: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id, Size: spv.Id, Flags: spv.Id, Variants: ..struct { Name, Value: spv.Id, }) -> spv.Id {
+	args := make([]spv.Id, 8 + len(Variants))
+	args[0] = Name
+	args[1] = Underlying_Type
+	args[2] = Source
+	args[3] = Line
+	args[4] = Column
+	args[5] = Parent
+	args[6] = Size
+	args[7] = Flags
+	for v, i in Variants {
+		args[8 + i * 2 + 0] = v.Name
+		args[8 + i * 2 + 1] = v.Value
+	}
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeEnum), ..args)
 }
 
-OpDebugTypeComposite :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Tag: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id, Linkage Name: spv.Id, Size: spv.Id, Flags: spv.Id, Members: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeComposite), Name, Tag, Source, Line, Column, Parent, Linkage Name, Size, Flags, Members)
+OpDebugTypeComposite :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Tag: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id, Linkage_Name: spv.Id, Size: spv.Id, Flags: spv.Id, Members: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeComposite), Name, Tag, Source, Line, Column, Parent, Linkage_Name, Size, Flags, Members)
 }
 
 OpDebugTypeMember :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Type: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Offset: spv.Id, Size: spv.Id, Flags: spv.Id, Value: spv.Id) -> spv.Id {
@@ -61,36 +75,36 @@ OpDebugTypeInheritance :: proc(builder: ^spv.Builder, result_type: spv.Id, Paren
 	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeInheritance), Parent, Offset, Size, Flags)
 }
 
-OpDebugTypePtrToMember :: proc(builder: ^spv.Builder, result_type: spv.Id, Member Type: spv.Id, Parent: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypePtrToMember), Member Type, Parent)
+OpDebugTypePtrToMember :: proc(builder: ^spv.Builder, result_type: spv.Id, Member_Type: spv.Id, Parent: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypePtrToMember), Member_Type, Parent)
 }
 
 OpDebugTypeTemplate :: proc(builder: ^spv.Builder, result_type: spv.Id, Target: spv.Id, Parameters: spv.Id) -> spv.Id {
 	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeTemplate), Target, Parameters)
 }
 
-OpDebugTypeTemplateParameter :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Actual Type: spv.Id, Value: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeTemplateParameter), Name, Actual Type, Value, Source, Line, Column)
+OpDebugTypeTemplateParameter :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Actual_Type: spv.Id, Value: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeTemplateParameter), Name, Actual_Type, Value, Source, Line, Column)
 }
 
-OpDebugTypeTemplateTemplateParameter :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Template Name: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeTemplateTemplateParameter), Name, Template Name, Source, Line, Column)
+OpDebugTypeTemplateTemplateParameter :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Template_Name: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeTemplateTemplateParameter), Name, Template_Name, Source, Line, Column)
 }
 
-OpDebugTypeTemplateParameterPack :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Template Parameters: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeTemplateParameterPack), Name, Source, Line, Column, Template Parameters)
+OpDebugTypeTemplateParameterPack :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Template_Parameters: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeTemplateParameterPack), Name, Source, Line, Column, Template_Parameters)
 }
 
-OpDebugGlobalVariable :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Type: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id, Linkage Name: spv.Id, Variable: spv.Id, Flags: spv.Id, Static Member Declaration: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugGlobalVariable), Name, Type, Source, Line, Column, Parent, Linkage Name, Variable, Flags, Static Member Declaration)
+OpDebugGlobalVariable :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Type: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id, Linkage_Name: spv.Id, Variable: spv.Id, Flags: spv.Id, Static_Member_Declaration: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugGlobalVariable), Name, Type, Source, Line, Column, Parent, Linkage_Name, Variable, Flags, Static_Member_Declaration)
 }
 
-OpDebugFunctionDeclaration :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Type: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id, Linkage Name: spv.Id, Flags: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugFunctionDeclaration), Name, Type, Source, Line, Column, Parent, Linkage Name, Flags)
+OpDebugFunctionDeclaration :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Type: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id, Linkage_Name: spv.Id, Flags: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugFunctionDeclaration), Name, Type, Source, Line, Column, Parent, Linkage_Name, Flags)
 }
 
-OpDebugFunction :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Type: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id, Linkage Name: spv.Id, Flags: spv.Id, Scope Line: spv.Id, Declaration: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugFunction), Name, Type, Source, Line, Column, Parent, Linkage Name, Flags, Scope Line, Declaration)
+OpDebugFunction :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Type: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id, Linkage_Name: spv.Id, Flags: spv.Id, Scope_Line: spv.Id, Declaration: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugFunction), Name, Type, Source, Line, Column, Parent, Linkage_Name, Flags, Scope_Line, Declaration)
 }
 
 OpDebugLexicalBlock :: proc(builder: ^spv.Builder, result_type: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id, Name: spv.Id) -> spv.Id {
@@ -101,8 +115,8 @@ OpDebugLexicalBlockDiscriminator :: proc(builder: ^spv.Builder, result_type: spv
 	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugLexicalBlockDiscriminator), Source, Discriminator, Parent)
 }
 
-OpDebugScope :: proc(builder: ^spv.Builder, result_type: spv.Id, Scope: spv.Id, Inlined At: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugScope), Scope, Inlined At)
+OpDebugScope :: proc(builder: ^spv.Builder, result_type: spv.Id, Scope: spv.Id, Inlined_At: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugScope), Scope, Inlined_At)
 }
 
 OpDebugNoScope :: proc(builder: ^spv.Builder, result_type: spv.Id) -> spv.Id {
@@ -113,28 +127,28 @@ OpDebugInlinedAt :: proc(builder: ^spv.Builder, result_type: spv.Id, Line: spv.I
 	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugInlinedAt), Line, Scope, Inlined)
 }
 
-OpDebugLocalVariable :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Type: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id, Flags: spv.Id, Arg Number: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugLocalVariable), Name, Type, Source, Line, Column, Parent, Flags, Arg Number)
+OpDebugLocalVariable :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Type: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id, Flags: spv.Id, Arg_Number: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugLocalVariable), Name, Type, Source, Line, Column, Parent, Flags, Arg_Number)
 }
 
 OpDebugInlinedVariable :: proc(builder: ^spv.Builder, result_type: spv.Id, Variable: spv.Id, Inlined: spv.Id) -> spv.Id {
 	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugInlinedVariable), Variable, Inlined)
 }
 
-OpDebugDeclare :: proc(builder: ^spv.Builder, result_type: spv.Id, Local Variable: spv.Id, Variable: spv.Id, Expression: spv.Id, Indexes: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugDeclare), Local Variable, Variable, Expression, Indexes)
+OpDebugDeclare :: proc(builder: ^spv.Builder, result_type: spv.Id, Local_Variable: spv.Id, Variable: spv.Id, Expression: spv.Id, Indexes: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugDeclare), Local_Variable, Variable, Expression, Indexes)
 }
 
-OpDebugValue :: proc(builder: ^spv.Builder, result_type: spv.Id, Local Variable: spv.Id, Value: spv.Id, Expression: spv.Id, Indexes: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugValue), Local Variable, Value, Expression, Indexes)
+OpDebugValue :: proc(builder: ^spv.Builder, result_type: spv.Id, Local_Variable: spv.Id, Value: spv.Id, Expression: spv.Id, Indexes: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugValue), Local_Variable, Value, Expression, Indexes)
 }
 
-OpDebugOperation :: proc(builder: ^spv.Builder, result_type: spv.Id, OpCode: spv.Id, Operands ...: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugOperation), OpCode, Operands ...)
+OpDebugOperation :: proc(builder: ^spv.Builder, result_type: spv.Id, OpCode: spv.Id, Operands____: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugOperation), OpCode, Operands____)
 }
 
-OpDebugExpression :: proc(builder: ^spv.Builder, result_type: spv.Id, Operands ...: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugExpression), Operands ...)
+OpDebugExpression :: proc(builder: ^spv.Builder, result_type: spv.Id, Operands____: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugExpression), Operands____)
 }
 
 OpDebugMacroDef :: proc(builder: ^spv.Builder, result_type: spv.Id, Source: spv.Id, Line: spv.Id, Name: spv.Id, Value: spv.Id) -> spv.Id {
@@ -161,8 +175,8 @@ OpDebugSourceContinued :: proc(builder: ^spv.Builder, result_type: spv.Id, Text:
 	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugSourceContinued), Text)
 }
 
-OpDebugLine :: proc(builder: ^spv.Builder, result_type: spv.Id, Source: spv.Id, Line Start: spv.Id, Line End: spv.Id, Column Start: spv.Id, Column End: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugLine), Source, Line Start, Line End, Column Start, Column End)
+OpDebugLine :: proc(builder: ^spv.Builder, result_type: spv.Id, Source: spv.Id, Line_Start: spv.Id, Line_End: spv.Id, Column_Start: spv.Id, Column_End: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugLine), Source, Line_Start, Line_End, Column_Start, Column_End)
 }
 
 OpDebugNoLine :: proc(builder: ^spv.Builder, result_type: spv.Id) -> spv.Id {
@@ -177,12 +191,12 @@ OpDebugStoragePath :: proc(builder: ^spv.Builder, result_type: spv.Id, Path: spv
 	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugStoragePath), Path)
 }
 
-OpDebugEntryPoint :: proc(builder: ^spv.Builder, result_type: spv.Id, Entry Point: spv.Id, Compilation Unit: spv.Id, Compiler Signature: spv.Id, Command-line Arguments: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugEntryPoint), Entry Point, Compilation Unit, Compiler Signature, Command-line Arguments)
+OpDebugEntryPoint :: proc(builder: ^spv.Builder, result_type: spv.Id, Entry_Point: spv.Id, Compilation_Unit: spv.Id, Compiler_Signature: spv.Id, Command_line_Arguments: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugEntryPoint), Entry_Point, Compilation_Unit, Compiler_Signature, Command_line_Arguments)
 }
 
-OpDebugTypeMatrix :: proc(builder: ^spv.Builder, result_type: spv.Id, Vector Type: spv.Id, Vector Count: spv.Id, Column Major: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeMatrix), Vector Type, Vector Count, Column Major)
+OpDebugTypeMatrix :: proc(builder: ^spv.Builder, result_type: spv.Id, Vector_Type: spv.Id, Vector_Count: spv.Id, Column_Major: spv.Id) -> spv.Id {
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeMatrix), Vector_Type, Vector_Count, Column_Major)
 }
 
 Op :: enum {

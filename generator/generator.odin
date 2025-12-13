@@ -425,7 +425,11 @@ generate_extension :: proc(grammar: Grammar, package_name: string) -> string {
 		fmt.sbprintfln(&ob, "\t%s = %v,", inst.opname, inst.opcode)
 
 		fmt.sbprintf(&b, "Op%s :: proc(builder: ^spv.Builder, result_type: spv.Id", inst.opname)
-		for operand in inst.operands {
+		for &operand in inst.operands {
+			operand.name, _ = strings.replace_all(operand.name, " ", "_", context.temp_allocator)
+			operand.name, _ = strings.replace_all(operand.name, ".", "_", context.temp_allocator)
+			operand.name, _ = strings.replace_all(operand.name, "~", "_", context.temp_allocator)
+			operand.name, _ = strings.replace_all(operand.name, "-", "_", context.temp_allocator)
 			fmt.sbprintf(&b, ", %s: spv.Id", operand.name)
 		}
 		fmt.sbprintfln(&b, ") -> spv.Id {{")
