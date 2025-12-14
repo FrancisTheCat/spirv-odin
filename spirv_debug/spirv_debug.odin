@@ -41,13 +41,17 @@ OpDebugTypedef :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id,
 	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypedef), Name, Base_Type, Source, Line, Column, Parent)
 }
 
-OpDebugTypeFunction :: proc(builder: ^spv.Builder, result_type: spv.Id, Flags: spv.Id, Return_Type: spv.Id, Parameter_Types: spv.Id) -> spv.Id {
-	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeFunction), Flags, Return_Type, Parameter_Types)
+OpDebugTypeFunction :: proc(builder: ^spv.Builder, result_type: spv.Id, Flags: spv.Id, Return_Type: spv.Id, Parameter_Types: ..spv.Id) -> spv.Id {
+	args := make([]spv.Id, 2 + len(Parameter_Types), context.temp_allocator)
+	args[0] = Flags
+	args[1] = Return_Type
+	copy(args[2:], Parameter_Types)
+	return spv.OpExtInst(builder, result_type, extension_id, u32(Op.DebugTypeFunction), ..args)
 }
 
 // manually adjusted
 OpDebugTypeEnum :: proc(builder: ^spv.Builder, result_type: spv.Id, Name: spv.Id, Underlying_Type: spv.Id, Source: spv.Id, Line: spv.Id, Column: spv.Id, Parent: spv.Id, Size: spv.Id, Flags: spv.Id, Variants: ..struct { Name, Value: spv.Id, }) -> spv.Id {
-	args := make([]spv.Id, 8 + len(Variants))
+	args := make([]spv.Id, 8 + len(Variants), context.temp_allocator)
 	args[0] = Name
 	args[1] = Underlying_Type
 	args[2] = Source
@@ -246,3 +250,48 @@ Op :: enum {
 	DebugTypeMatrix = 108,
 }
 
+DebugInfoFlags :: enum u32 {
+	None                    = 0x0000,
+	FlagIsProtected         = 0x01,
+	FlagIsPrivate           = 0x02,
+	FlagIsPublic            = 0x03,
+	FlagIsLocal             = 0x04,
+	FlagIsDefinition        = 0x08,
+	FlagFwdDecl             = 0x10,
+	FlagArtificial          = 0x20,
+	FlagExplicit            = 0x40,
+	FlagPrototyped          = 0x80,
+	FlagObjectPointer       = 0x100,
+	FlagStaticMember        = 0x200,
+	FlagIndirectVariable    = 0x400,
+	FlagLValueReference     = 0x800,
+	FlagRValueReference     = 0x1000,
+	FlagIsOptimized         = 0x2000,
+	FlagIsEnumClass         = 0x4000,
+	FlagTypePassByValue     = 0x8000,
+	FlagTypePassByReference = 0x10000,
+}
+
+DebugBaseTypeAttributeEncoding :: enum u32 {
+	Unspecified  = 0,
+	Address      = 1,
+	Boolean      = 2,
+	Float        = 3,
+	Signed       = 4,
+	SignedChar   = 5,
+	Unsigned     = 6,
+	UnsignedChar = 7,
+}
+
+DebugCompositeType :: enum u32 {
+	Class     = 0,
+	Structure = 1,
+	Union     = 2,
+}
+
+DebugTypeQualifier :: enum u32 {
+	ConstType    = 0,
+	VolatileType = 1,
+	RestrictType = 2,
+	AtomicType   = 3,
+}
